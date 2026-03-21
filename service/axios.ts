@@ -1,0 +1,50 @@
+import axios from "axios";
+
+const BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+
+const axiosInstance = axios.create({
+  baseURL: BASE_URL,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+axiosInstance.interceptors.request.use((config) => {
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  return config;
+});
+
+axiosInstance.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (!axios.isAxiosError(error)) {
+      return Promise.reject(error);
+    }
+
+    const data = error.response?.data;
+    if (
+      data &&
+      typeof data === "object" &&
+      "errorCode" in data &&
+      (data as { errorCode: unknown }).errorCode === "TOKEN_EXPIRED"
+    ) {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("token");
+        if (!window.location.pathname.startsWith("/auth")) {
+          window.location.assign("/auth");
+        }
+      }
+    }
+
+    return Promise.reject(error);
+  },
+);
+
+export default axiosInstance;
