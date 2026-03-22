@@ -4,6 +4,7 @@ import axios from "axios";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { persistAuthSession } from "@/lib/auth-storage";
 import { login, register } from "@/service/api";
 
 const inputClass =
@@ -38,17 +39,18 @@ export default function AuthPage() {
           email: form.email,
           password: form.password,
         });
-        localStorage.setItem("token", res.data.token);
+        persistAuthSession(res.data.token, res.data.user);
         router.replace("/chat");
         return;
       }
 
-      await register({
+      const reg = await register({
         name: form.name,
         email: form.email,
         password: form.password,
         username: form.username,
       });
+      persistAuthSession(reg.data.token, reg.data.user);
       router.replace("/chat");
       return;
     } catch (err: unknown) {

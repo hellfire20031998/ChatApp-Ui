@@ -1,9 +1,18 @@
 "use client";
 
 import axios from "axios";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { LogoutButton } from "@/components/logout-button";
-import { searchUsers, startChat } from "@/service/api";
+import {
+  connectSocket,
+  disconnectSocket,
+  readUserIdFromToken,
+  sendMessage,
+  type ChatSocketPayload,
+  type SocketStatus,
+} from "@/lib/socket";
+import { getChats, searchUsers, startChat } from "@/service/api";
+import type { MyChatSummary } from "@/service/type";
 
 type UserRow = {
   id: string;
@@ -16,10 +25,12 @@ type SelectedChat = {
   chatId: string;
 };
 
-type LocalMessage = {
+type ChatMessage = {
   id: string;
   text: string;
   outbound: boolean;
+  pending?: boolean;
+  createdAt?: string;
 };
 
 function IconSearch({ className }: { className?: string }) {
@@ -120,15 +131,217 @@ function Avatar({
   );
 }
 
+function normalizeMyChatSummary(row: unknown): MyChatSummary | null {
+  if (!row || typeof row !== "object") return null;
+  const r = row as Record<string, unknown>;
+  if (r.id == null) return null;
+
+  const otherRaw = r.otherUser;
+  if (!otherRaw || typeof otherRaw !== "object") return null;
+  const ou = otherRaw as Record<string, unknown>;
+  if (ou.id == null) return null;
+
+  const lastMessageRaw = r.lastMessage;
+  const lastMessage =
+    lastMessageRaw === null || lastMessageRaw === undefined
+      ? null
+      : typeof lastMessageRaw === "string"
+        ? lastMessageRaw
+        : null;
+
+  const groupNameRaw = r.groupName;
+  const groupName =
+    groupNameRaw === null || groupNameRaw === undefined
+      ? null
+      : String(groupNameRaw);
+
+  const lastTimeRaw = r.lastMessageTime;
+  const lastMessageTime =
+    lastTimeRaw === null || lastTimeRaw === undefined
+      ? null
+      : String(lastTimeRaw);
+
+  return {
+    id: String(r.id),
+    createdAt: r.createdAt != null ? String(r.createdAt) : "",
+    updatedAt: r.updatedAt != null ? String(r.updatedAt) : "",
+    deleted: Boolean(r.deleted),
+    group: Boolean(r.group),
+    groupName,
+    lastMessage,
+    lastMessageTime,
+    otherUser: {
+      id: String(ou.id),
+      username: typeof ou.username === "string" ? ou.username : "",
+      name: typeof ou.name === "string" ? ou.name : "",
+      email: typeof ou.email === "string" ? ou.email : "",
+      createdAt: ou.createdAt != null ? String(ou.createdAt) : "",
+      updatedAt: ou.updatedAt != null ? String(ou.updatedAt) : "",
+      deleted: Boolean(ou.deleted),
+      userRole:
+        ou.userRole === null || ou.userRole === undefined
+          ? null
+          : String(ou.userRole),
+    },
+    participants: r.participants ?? null,
+    unreadCount:
+      typeof r.unreadCount === "number" && Number.isFinite(r.unreadCount)
+        ? r.unreadCount
+        : 0,
+  };
+}
+
+function chatPeerDisplayName(chat: MyChatSummary): string {
+  if (chat.group) {
+    return chat.groupName?.trim() || "Group";
+  }
+  const u = chat.otherUser;
+  return u.name?.trim() || u.username || "Chat";
+}
+
+function formatListTime(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) {
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+function formatMessageTime(iso?: string): string {
+  if (!iso) {
+    return new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    return new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 export default function ChatPage() {
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [chats, setChats] = useState<MyChatSummary[]>([]);
+  const [chatsLoading, setChatsLoading] = useState(true);
+  const [chatsError, setChatsError] = useState<string | null>(null);
   const [selectedChat, setSelectedChat] = useState<SelectedChat | null>(null);
-  const [messages, setMessages] = useState<LocalMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [searchBusy, setSearchBusy] = useState(false);
   const [openBusy, setOpenBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [socketStatus, setSocketStatus] = useState<SocketStatus>("disconnected");
+
+  const activeChatIdRef = useRef<string | null>(null);
+  const selfUserIdRef = useRef<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    activeChatIdRef.current = selectedChat?.chatId ?? null;
+  }, [selectedChat?.chatId]);
+
+  useEffect(() => {
+    setMessages([]);
+    setDraft("");
+  }, [selectedChat?.chatId]);
+
+  useEffect(() => {
+    const userId = readUserIdFromToken() ?? "";
+    selfUserIdRef.current = userId || null;
+
+    const onIncoming = (payload: ChatSocketPayload) => {
+      const activeId = activeChatIdRef.current;
+      if (!activeId || payload.chatId !== activeId) return;
+
+      const selfId = selfUserIdRef.current ?? "";
+      const isOwnMessage = Boolean(selfId) && payload.senderId === selfId;
+
+      setMessages((prev) => {
+        const serverId = payload.id ?? `ws-${Date.now()}`;
+        const withoutMatchingPending = prev.filter(
+          (m) =>
+            !(
+              m.pending &&
+              m.outbound &&
+              m.text === payload.content &&
+              isOwnMessage
+            ),
+        );
+        if (withoutMatchingPending.some((m) => m.id === serverId)) {
+          return prev;
+        }
+        return [
+          ...withoutMatchingPending,
+          {
+            id: serverId,
+            text: payload.content,
+            outbound: isOwnMessage,
+            createdAt: payload.createdAt,
+          },
+        ];
+      });
+    };
+
+    const onStatus = (status: SocketStatus, detail?: string) => {
+      setSocketStatus(status);
+      if (detail && status === "error") {
+        console.warn("[chat]", detail);
+      }
+    };
+
+    if (!userId) {
+      setSocketStatus("error");
+      return;
+    }
+
+    connectSocket(userId, onIncoming, onStatus);
+    return () => disconnectSocket();
+  }, []);
+
+  const loadChats = useCallback(async () => {
+    setChatsLoading(true);
+    setChatsError(null);
+    try {
+      const res = await getChats();
+      const raw = res.data.allChats;
+      const list = Array.isArray(raw)
+        ? raw
+            .map(normalizeMyChatSummary)
+            .filter((c): c is MyChatSummary => c !== null)
+        : [];
+      setChats(list);
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        const body = err.response?.data;
+        setChatsError(
+          typeof body === "object" &&
+            body !== null &&
+            "message" in body &&
+            typeof (body as { message: unknown }).message === "string"
+            ? (body as { message: string }).message
+            : "Could not load your chats",
+        );
+      } else {
+        setChatsError("Could not load your chats");
+      }
+      setChats([]);
+    } finally {
+      setChatsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadChats();
+  }, [loadChats]);
 
   const handleSearch = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -159,6 +372,8 @@ export default function ChatPage() {
   const handleOpenChat = async (user: UserRow) => {
     setError(null);
     setOpenBusy(true);
+    setMessages([]);
+    setDraft("");
     try {
       const res = await startChat<{ id: string | number }>(user.id);
       const payload = res.data;
@@ -173,8 +388,7 @@ export default function ChatPage() {
         name: user.username,
         chatId,
       });
-      setMessages([]);
-      setDraft("");
+      void loadChats();
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
         const body = err.response?.data;
@@ -194,29 +408,57 @@ export default function ChatPage() {
     }
   };
 
+  const handleSelectExistingChat = (chat: MyChatSummary) => {
+    setError(null);
+    setSelectedChat({
+      chatId: chat.id,
+      userId: chat.group ? "" : chat.otherUser.id,
+      name: chatPeerDisplayName(chat),
+    });
+  };
+
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     const text = draft.trim();
     if (!text || !selectedChat) return;
+    if (!selectedChat.userId) {
+      setError("Messaging in groups is not set up yet — open a direct chat.");
+      return;
+    }
+    setError(null);
+
+    const tempId = `pending-${Date.now()}`;
     setMessages((prev) => [
       ...prev,
       {
-        id:
-          typeof crypto !== "undefined" && crypto.randomUUID
-            ? crypto.randomUUID()
-            : `${Date.now()}-${Math.random()}`,
+        id: tempId,
         text,
         outbound: true,
+        pending: true,
       },
     ]);
     setDraft("");
+
+    const sent = sendMessage({
+      chatId: selectedChat.chatId,
+      receiverId: selectedChat.userId,
+      content: text,
+      type: "TEXT",
+    });
+
+    if (!sent) {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setError("Not connected — message was not sent.");
+    }
   };
 
   const closeChatMobile = () => {
     setSelectedChat(null);
-    setMessages([]);
-    setDraft("");
   };
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const sidebarHiddenOnMobile = selectedChat !== null;
 
@@ -263,37 +505,107 @@ export default function ChatPage() {
           </p>
         ) : null}
 
+        {chatsError ? (
+          <p
+            className="mx-3 mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800"
+            role="alert"
+          >
+            {chatsError}
+          </p>
+        ) : null}
+
         <div className="min-h-0 flex-1 overflow-y-auto bg-white">
-          {users.length === 0 ? (
+          {chatsLoading ? (
             <p className="px-4 py-8 text-center text-sm text-[#667781]">
-              Search for people to message.
+              Loading your chats…
             </p>
           ) : (
-            <ul className="divide-y divide-[#f0f2f5]">
-              {users.map((user) => {
-                const active = selectedChat?.userId === user.id;
-                return (
-                  <li key={user.id}>
-                    <button
-                      type="button"
-                      disabled={openBusy}
-                      onClick={() => handleOpenChat(user)}
-                      className={`flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-[#f5f6f6] disabled:opacity-60 ${active ? "bg-[#f0f2f5]" : ""}`}
-                    >
-                      <Avatar label={user.username} />
-                      <div className="min-w-0 flex-1 border-b border-[#f0f2f5] pb-3">
-                        <p className="truncate font-medium text-[#111b21]">
-                          {user.username}
-                        </p>
-                        <p className="truncate text-sm text-[#667781]">
-                          Tap to open chat
-                        </p>
-                      </div>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+            <>
+              {chats.length > 0 ? (
+                <ul className="divide-y divide-[#f0f2f5]">
+                  {chats.map((chat) => {
+                    const active = selectedChat?.chatId === chat.id;
+                    const title = chatPeerDisplayName(chat);
+                    const preview =
+                      chat.lastMessage ??
+                      (chat.group ? "Group chat" : "No messages yet");
+                    return (
+                      <li key={chat.id}>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectExistingChat(chat)}
+                          className={`flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-[#f5f6f6] ${active ? "bg-[#f0f2f5]" : ""}`}
+                        >
+                          <Avatar label={title} />
+                          <div className="min-w-0 flex-1 border-b border-[#f0f2f5] py-0.5">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <p className="truncate font-medium text-[#111b21]">
+                                {title}
+                              </p>
+                              {chat.lastMessageTime ? (
+                                <span className="shrink-0 text-[11px] text-[#667781]">
+                                  {formatListTime(chat.lastMessageTime)}
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="truncate text-sm text-[#667781]">
+                              {preview}
+                            </p>
+                          </div>
+                          {chat.unreadCount > 0 ? (
+                            <span className="shrink-0 self-center rounded-full bg-[#008069] px-2 py-0.5 text-xs font-medium text-white">
+                              {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
+                            </span>
+                          ) : null}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
+
+              {users.length > 0 ? (
+                <>
+                  <div className="sticky top-0 z-10 bg-[#f0f2f5] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[#667781]">
+                    Search results
+                  </div>
+                  <ul className="divide-y divide-[#f0f2f5]">
+                    {users.map((user) => {
+                      const active = selectedChat?.userId === user.id;
+                      return (
+                        <li key={user.id}>
+                          <button
+                            type="button"
+                            disabled={openBusy}
+                            onClick={() => handleOpenChat(user)}
+                            className={`flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-[#f5f6f6] disabled:opacity-60 ${active ? "bg-[#f0f2f5]" : ""}`}
+                          >
+                            <Avatar label={user.username} />
+                            <div className="min-w-0 flex-1 border-b border-[#f0f2f5] pb-3">
+                              <p className="truncate font-medium text-[#111b21]">
+                                {user.username}
+                              </p>
+                              <p className="truncate text-sm text-[#667781]">
+                                Tap to start or open chat
+                              </p>
+                            </div>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
+              ) : null}
+
+              {!chatsLoading &&
+              chats.length === 0 &&
+              users.length === 0 &&
+              !chatsError ? (
+                <p className="px-4 py-8 text-center text-sm text-[#667781]">
+                  No conversations yet. Search above to find people.
+                </p>
+              ) : null}
+            </>
           )}
         </div>
       </aside>
@@ -318,7 +630,17 @@ export default function ChatPage() {
                 <p className="truncate text-[17px] font-medium leading-tight">
                   {selectedChat.name}
                 </p>
-                <p className="truncate text-xs text-white/85">online</p>
+                <p className="truncate text-xs text-white/85">
+                  {socketStatus === "connected"
+                    ? "Connected · live messages"
+                    : socketStatus === "connecting"
+                      ? "Connecting…"
+                      : socketStatus === "reconnecting"
+                        ? "Reconnecting…"
+                        : socketStatus === "error"
+                          ? "Connection issue — check login"
+                          : "Offline"}
+                </p>
               </div>
               <div className="hidden items-center gap-1 sm:flex">
                 <span className="rounded-full p-2 opacity-90 hover:bg-white/10">
@@ -365,20 +687,21 @@ export default function ChatPage() {
                             m.outbound
                               ? "rounded-br-none bg-[#d9fdd3] text-[#111b21]"
                               : "rounded-bl-none bg-white text-[#111b21]"
-                          }`}
+                          } ${m.pending ? "opacity-75 ring-1 ring-[#008069]/25" : ""}`}
                         >
                           <p className="whitespace-pre-wrap wrap-break-word">
                             {m.text}
                           </p>
                           <p className="mt-0.5 text-right text-[11px] text-[#667781]">
-                            {new Date().toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {formatMessageTime(m.createdAt)}
+                            {m.pending ? " · sending" : ""}
                           </p>
                         </div>
                       </li>
                     ))}
+                    <li aria-hidden>
+                      <div ref={messagesEndRef} className="h-1" />
+                    </li>
                   </ul>
                 )}
               </div>
@@ -414,7 +737,11 @@ export default function ChatPage() {
                 <button
                   type="submit"
                   className="mb-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#008069] text-white shadow-md transition hover:bg-[#006d5b] disabled:opacity-40"
-                  disabled={!draft.trim()}
+                  disabled={
+                    !draft.trim() ||
+                    !selectedChat.userId ||
+                    socketStatus !== "connected"
+                  }
                   aria-label="Send"
                 >
                   <IconSend className="ml-0.5" />

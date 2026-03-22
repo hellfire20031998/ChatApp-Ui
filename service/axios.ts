@@ -1,4 +1,5 @@
 import axios from "axios";
+import { clearAuthSession } from "@/lib/auth-storage";
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
@@ -36,7 +37,7 @@ axiosInstance.interceptors.response.use(
       (data as { errorCode: unknown }).errorCode === "TOKEN_EXPIRED"
     ) {
       if (typeof window !== "undefined") {
-        localStorage.removeItem("token");
+        clearAuthSession();
         if (!window.location.pathname.startsWith("/auth")) {
           window.location.assign("/auth");
         }

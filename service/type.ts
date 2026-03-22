@@ -19,6 +19,52 @@ export type ApiResponse<T> = {
   data: T;
 };
 
-export type AuthTokenPayload = {
+/** Logged-in user returned with JWT from `/auth/login` and `/auth/register`. */
+export type AuthUser = {
+  id: string;
+  email: string;
+  username: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  deleted: boolean;
+  userRole: string | null;
+};
+
+/** `data` for successful auth responses (`token` + `user`). */
+export type AuthSessionPayload = {
   token: string;
+  user: AuthUser;
+};
+
+/** Nested user on a chat row from `GET /chats/my-chats`. */
+export type ChatOtherUser = {
+  id: string;
+  username: string;
+  name: string;
+  email: string;
+  createdAt: string;
+  updatedAt: string;
+  deleted: boolean;
+  userRole: string | null;
+};
+
+/** One row inside `data.allChats` from `GET /chats/my-chats`. */
+export type MyChatSummary = {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  deleted: boolean;
+  group: boolean;
+  groupName: string | null;
+  lastMessage: string | null;
+  lastMessageTime: string | null;
+  otherUser: ChatOtherUser;
+  participants: unknown;
+  unreadCount: number;
+};
+
+/** `data` object from `GET /chats/my-chats`. */
+export type MyChatsPayload = {
+  allChats: MyChatSummary[];
 };

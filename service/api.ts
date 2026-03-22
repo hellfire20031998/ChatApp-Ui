@@ -1,8 +1,9 @@
 import axiosInstance from "./axios";
 import type {
   ApiResponse,
-  AuthTokenPayload,
+  AuthSessionPayload,
   LoginRequest,
+  MyChatsPayload,
   RegisterRequest,
 } from "./type";
 
@@ -28,8 +29,8 @@ export const startChat = async <T = unknown>(
 
 export const login = async (
   payload: LoginRequest,
-): Promise<ApiResponse<AuthTokenPayload>> => {
-  const res = await axiosInstance.post<ApiResponse<AuthTokenPayload>>(
+): Promise<ApiResponse<AuthSessionPayload>> => {
+  const res = await axiosInstance.post<ApiResponse<AuthSessionPayload>>(
     `/auth/login`,
     payload,
   );
@@ -38,10 +39,17 @@ export const login = async (
 
 export const register = async (
   payload: RegisterRequest,
-): Promise<ApiResponse<unknown>> => {
-  const res = await axiosInstance.post<ApiResponse<unknown>>(
+): Promise<ApiResponse<AuthSessionPayload>> => {
+  const res = await axiosInstance.post<ApiResponse<AuthSessionPayload>>(
     `/auth/register`,
     payload,
+  );
+  return res.data;
+};
+
+export const getChats = async (): Promise<ApiResponse<MyChatsPayload>> => {
+  const res = await axiosInstance.get<ApiResponse<MyChatsPayload>>(
+    `/chats/my-chats`,
   );
   return res.data;
 };
