@@ -44,10 +44,14 @@ export type ChatSocketPayload = {
   chatId: string;
   content: string;
   senderId?: string;
+  senderUsername?: string;
   receiverId?: string;
   type?: string;
+  status?: string;
   id?: string;
   createdAt?: string;
+  updatedAt?: string;
+  deleted?: boolean;
 };
 
 let stompClient: Client | null = null;
@@ -89,19 +93,44 @@ function normalizeIncomingPayload(parsed: unknown): ChatSocketPayload | null {
         ? String(o.message)
         : "";
 
+  const senderFromObject =
+    o.sender && typeof o.sender === "object"
+      ? (o.sender as Record<string, unknown>).id
+      : undefined;
+  const senderUsername =
+    o.sender && typeof o.sender === "object"
+      ? (() => {
+          const s = o.sender as Record<string, unknown>;
+          if (typeof s.username === "string") return s.username;
+          if (typeof s.name === "string") return s.name;
+          return undefined;
+        })()
+      : undefined;
+
   const createdAt =
-    o.createdAt != null
-      ? String(o.createdAt)
-      : formatServerTimestamp(o.timeStamp);
+    o.timeStamp != null
+      ? formatServerTimestamp(o.timeStamp)
+      : o.createdAt != null
+        ? String(o.createdAt)
+        : undefined;
 
   return {
     chatId: String(o.chatId),
     content,
-    senderId: o.senderId != null ? String(o.senderId) : undefined,
+    senderId:
+      o.senderId != null
+        ? String(o.senderId)
+        : senderFromObject != null
+          ? String(senderFromObject)
+          : undefined,
+    senderUsername,
     receiverId: o.receiverId != null ? String(o.receiverId) : undefined,
     type: typeof o.type === "string" ? o.type : undefined,
+    status: typeof o.status === "string" ? o.status : undefined,
     id: o.id != null ? String(o.id) : undefined,
     createdAt,
+    updatedAt: o.updatedAt != null ? String(o.updatedAt) : undefined,
+    deleted: typeof o.deleted === "boolean" ? o.deleted : undefined,
   };
 }
 

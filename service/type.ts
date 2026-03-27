@@ -68,3 +68,32 @@ export type MyChatSummary = {
 export type MyChatsPayload = {
   allChats: MyChatSummary[];
 };
+
+/** One message row from `GET /messages/{chatId}`. */
+export type ChatMessageDto = {
+  id: string;
+  chatId: string;
+  senderId: string;
+  receiverId: string;
+  sender?: {
+    id: string;
+    username: string;
+    name?: string;
+    email?: string;
+  };
+  content: string;
+  timeStamp: string;
+  status: string;
+  type: string;
+  createdAt: string;
+  updatedAt: string;
+  deleted: boolean;
+};
+
+/** `data` object from paginated `GET /messages/{chatId}`. */
+export type ChatMessagesPagePayload = {
+  messageDtoList: ChatMessageDto[];
+  currentPage: number;
+  totalPages: number;
+  totalElements: number;
+};

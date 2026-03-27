@@ -11,8 +11,15 @@ import {
   type ChatSocketPayload,
   type SocketStatus,
 } from "@/lib/socket";
-import { getChats, searchUsers, startChat } from "@/service/api";
-import type { MyChatSummary } from "@/service/type";
+import {
+  deleteMessage,
+  getChatMessages,
+  getChats,
+  searchUsers,
+  startChat,
+  updateMessage,
+} from "@/service/api";
+import type { ChatMessageDto, MyChatSummary } from "@/service/type";
 
 type UserRow = {
   id: string;
@@ -27,10 +34,14 @@ type SelectedChat = {
 
 type ChatMessage = {
   id: string;
+  chatId?: string;
   text: string;
   outbound: boolean;
+  senderUsername?: string;
   pending?: boolean;
+  deleted?: boolean;
   createdAt?: string;
+  status?: string;
 };
 
 function IconSearch({ className }: { className?: string }) {
@@ -227,6 +238,44 @@ function formatMessageTime(iso?: string): string {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function normalizeMessageDto(
+  row: unknown,
+  selfUserId: string | null,
+): ChatMessage | null {
+  if (!row || typeof row !== "object") return null;
+  const r = row as Partial<ChatMessageDto>;
+  if (!r.id || !r.chatId) return null;
+  const content =
+    typeof r.content === "string"
+      ? r.content
+      : r.content != null
+        ? String(r.content)
+        : "";
+  return {
+    id: String(r.id),
+    chatId: String(r.chatId),
+    text: content,
+    outbound: Boolean(selfUserId) && r.senderId === selfUserId,
+    senderUsername:
+      r.sender && typeof r.sender === "object"
+        ? (() => {
+            const s = r.sender as { username?: unknown; name?: unknown };
+            if (typeof s.username === "string") return s.username;
+            if (typeof s.name === "string") return s.name;
+            return undefined;
+          })()
+        : undefined,
+    createdAt:
+      typeof r.createdAt === "string"
+        ? r.createdAt
+        : typeof r.timeStamp === "string"
+          ? r.timeStamp
+          : undefined,
+    status: typeof r.status === "string" ? r.status : undefined,
+    deleted: Boolean(r.deleted),
+  };
+}
+
 export default function ChatPage() {
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -240,18 +289,24 @@ export default function ChatPage() {
   const [openBusy, setOpenBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [socketStatus, setSocketStatus] = useState<SocketStatus>("disconnected");
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [nextPage, setNextPage] = useState(0);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [messageBusyIds, setMessageBusyIds] = useState<Record<string, boolean>>(
+    {},
+  );
 
   const activeChatIdRef = useRef<string | null>(null);
   const selfUserIdRef = useRef<string | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const isPrependingRef = useRef(false);
 
   useEffect(() => {
     activeChatIdRef.current = selectedChat?.chatId ?? null;
-  }, [selectedChat?.chatId]);
-
-  useEffect(() => {
-    setMessages([]);
-    setDraft("");
   }, [selectedChat?.chatId]);
 
   useEffect(() => {
@@ -276,16 +331,33 @@ export default function ChatPage() {
               isOwnMessage
             ),
         );
-        if (withoutMatchingPending.some((m) => m.id === serverId)) {
-          return prev;
+        const existingIndex = withoutMatchingPending.findIndex(
+          (m) => m.id === serverId,
+        );
+        if (existingIndex >= 0) {
+          const copy = [...withoutMatchingPending];
+          copy[existingIndex] = {
+            ...copy[existingIndex],
+            text: payload.content,
+            outbound: isOwnMessage,
+            senderUsername: payload.senderUsername ?? copy[existingIndex].senderUsername,
+            createdAt: payload.createdAt ?? copy[existingIndex].createdAt,
+            status: payload.status ?? copy[existingIndex].status,
+            deleted: payload.deleted ?? copy[existingIndex].deleted,
+          };
+          return copy;
         }
         return [
           ...withoutMatchingPending,
           {
             id: serverId,
+            chatId: payload.chatId,
             text: payload.content,
             outbound: isOwnMessage,
+            senderUsername: payload.senderUsername,
             createdAt: payload.createdAt,
+            status: payload.status,
+            deleted: payload.deleted,
           },
         ];
       });
@@ -342,6 +414,102 @@ export default function ChatPage() {
   useEffect(() => {
     void loadChats();
   }, [loadChats]);
+
+  const loadMessagesPage = useCallback(
+    async (
+      chatId: string,
+      page: number,
+      mode: "replace" | "prepend",
+      scrollSnapshot?: { prevHeight: number; prevTop: number },
+    ) => {
+      if (mode === "replace") {
+        setMessagesLoading(true);
+        setMessages([]);
+        setHasMoreMessages(false);
+        setNextPage(0);
+      } else {
+        setLoadingOlder(true);
+        isPrependingRef.current = true;
+      }
+
+      try {
+        const res = await getChatMessages(chatId, page, 20);
+        if (activeChatIdRef.current !== chatId) return;
+
+        const data = res.data;
+        const list = Array.isArray(data.messageDtoList)
+          ? data.messageDtoList
+              .map((row) => normalizeMessageDto(row, selfUserIdRef.current))
+              .filter((m): m is ChatMessage => m !== null)
+          : [];
+
+        setMessages((prev) => {
+          const merged = mode === "replace" ? list : [...list, ...prev];
+          const byId = new Map<string, ChatMessage>();
+          for (const item of merged) byId.set(item.id, item);
+          return [...byId.values()].sort((a, b) => {
+            const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return ta - tb;
+          });
+        });
+
+        setHasMoreMessages(data.currentPage + 1 < data.totalPages);
+        setNextPage(data.currentPage + 1);
+
+        if (mode === "replace") {
+          requestAnimationFrame(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+          });
+        } else if (scrollSnapshot) {
+          requestAnimationFrame(() => {
+            const container = messagesContainerRef.current;
+            if (!container) return;
+            const newHeight = container.scrollHeight;
+            container.scrollTop =
+              newHeight - scrollSnapshot.prevHeight + scrollSnapshot.prevTop;
+          });
+        }
+      } catch (err: unknown) {
+        if (axios.isAxiosError(err)) {
+          const body = err.response?.data;
+          setError(
+            typeof body === "object" &&
+              body !== null &&
+              "message" in body &&
+              typeof (body as { message: unknown }).message === "string"
+              ? (body as { message: string }).message
+              : "Could not load messages",
+          );
+        } else {
+          setError("Could not load messages");
+        }
+      } finally {
+        setMessagesLoading(false);
+        setLoadingOlder(false);
+        isPrependingRef.current = false;
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const chatId = selectedChat?.chatId;
+    setEditingMessageId(null);
+    setEditDraft("");
+    if (!chatId) {
+      setMessages([]);
+      setDraft("");
+      setMessagesLoading(false);
+      setLoadingOlder(false);
+      setHasMoreMessages(false);
+      setNextPage(0);
+      setMessageBusyIds({});
+      return;
+    }
+
+    void loadMessagesPage(chatId, 0, "replace");
+  }, [selectedChat?.chatId, loadMessagesPage]);
 
   const handleSearch = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -432,9 +600,12 @@ export default function ChatPage() {
       ...prev,
       {
         id: tempId,
+        chatId: selectedChat.chatId,
         text,
         outbound: true,
         pending: true,
+        status: "SENDING",
+        createdAt: new Date().toISOString(),
       },
     ]);
     setDraft("");
@@ -456,7 +627,131 @@ export default function ChatPage() {
     setSelectedChat(null);
   };
 
+  const startEditMessage = (message: ChatMessage) => {
+    setEditingMessageId(message.id);
+    setEditDraft(message.text);
+  };
+
+  const cancelEditMessage = () => {
+    setEditingMessageId(null);
+    setEditDraft("");
+  };
+
+  const saveEditMessage = async (messageId: string) => {
+    const content = editDraft.trim();
+    if (!content) {
+      setError("Message cannot be empty.");
+      return;
+    }
+    const current = messages.find((m) => m.id === messageId);
+    if (!current) return;
+    const previousText = current.text;
+
+    setMessageBusyIds((prev) => ({ ...prev, [messageId]: true }));
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId
+          ? { ...m, text: content, status: "UPDATING" }
+          : m,
+      ),
+    );
+    setEditingMessageId(null);
+    setEditDraft("");
+
+    try {
+      const res = await updateMessage(messageId, { content, type: "TEXT" });
+      const updated = normalizeMessageDto(res.data, selfUserIdRef.current);
+      if (updated) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? { ...m, ...updated } : m)),
+        );
+      }
+    } catch (err: unknown) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId ? { ...m, text: previousText } : m,
+        ),
+      );
+      if (axios.isAxiosError(err)) {
+        const body = err.response?.data;
+        setError(
+          typeof body === "object" &&
+            body !== null &&
+            "message" in body &&
+            typeof (body as { message: unknown }).message === "string"
+            ? (body as { message: string }).message
+            : "Could not edit message",
+        );
+      } else {
+        setError("Could not edit message");
+      }
+    } finally {
+      setMessageBusyIds((prev) => {
+        const next = { ...prev };
+        delete next[messageId];
+        return next;
+      });
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    const previous = messages.find((m) => m.id === messageId);
+    if (!previous) return;
+    setMessageBusyIds((prev) => ({ ...prev, [messageId]: true }));
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId
+          ? { ...m, deleted: true, text: "Message deleted", status: "DELETED" }
+          : m,
+      ),
+    );
+    if (editingMessageId === messageId) cancelEditMessage();
+
+    try {
+      const res = await deleteMessage(messageId);
+      const deleted = normalizeMessageDto(res.data, selfUserIdRef.current);
+      if (deleted) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? { ...m, ...deleted, deleted: true } : m)),
+        );
+      }
+    } catch (err: unknown) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? previous : m)),
+      );
+      if (axios.isAxiosError(err)) {
+        const body = err.response?.data;
+        setError(
+          typeof body === "object" &&
+            body !== null &&
+            "message" in body &&
+            typeof (body as { message: unknown }).message === "string"
+            ? (body as { message: string }).message
+            : "Could not delete message",
+        );
+      } else {
+        setError("Could not delete message");
+      }
+    } finally {
+      setMessageBusyIds((prev) => {
+        const next = { ...prev };
+        delete next[messageId];
+        return next;
+      });
+    }
+  };
+
+  const handleMessagesScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (!selectedChat?.chatId) return;
+    if (el.scrollTop > 60) return;
+    if (loadingOlder || messagesLoading || !hasMoreMessages) return;
+    const snapshot = { prevHeight: el.scrollHeight, prevTop: el.scrollTop };
+    void loadMessagesPage(selectedChat.chatId, nextPage, "prepend", snapshot);
+  };
+
   useEffect(() => {
+    if (isPrependingRef.current) return;
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
@@ -657,6 +952,8 @@ export default function ChatPage() {
             </header>
 
             <div
+              ref={messagesContainerRef}
+              onScroll={handleMessagesScroll}
               className="relative min-h-0 flex-1 overflow-y-auto"
               style={{
                 backgroundColor: "#e5ddd5",
@@ -664,14 +961,21 @@ export default function ChatPage() {
               }}
             >
               <div className="flex min-h-full flex-col justify-end px-4 py-3 pb-2">
+                {loadingOlder ? (
+                  <p className="pb-2 text-center text-xs text-[#667781]">
+                    Loading older messages...
+                  </p>
+                ) : null}
                 {messages.length === 0 ? (
                   <div className="flex flex-1 flex-col items-center justify-center px-6 py-12">
                     <div className="max-w-sm rounded-lg border border-[#d1d7db] bg-[#ffecb3]/90 px-4 py-3 text-center text-sm text-[#54656f] shadow-sm">
                       <span className="font-medium text-[#111b21]">
-                        No messages yet
+                        {messagesLoading ? "Loading messages..." : "No messages yet"}
                       </span>
                       <p className="mt-1 text-[13px] leading-snug">
-                        Send a message to start the conversation.
+                        {messagesLoading
+                          ? "Please wait while we load this chat history."
+                          : "Send a message to start the conversation."}
                       </p>
                     </div>
                   </div>
@@ -689,12 +993,72 @@ export default function ChatPage() {
                               : "rounded-bl-none bg-white text-[#111b21]"
                           } ${m.pending ? "opacity-75 ring-1 ring-[#008069]/25" : ""}`}
                         >
-                          <p className="whitespace-pre-wrap wrap-break-word">
-                            {m.text}
-                          </p>
+                          {!m.outbound && m.senderUsername ? (
+                            <p className="mb-1 text-xs font-medium text-[#008069]">
+                              {m.senderUsername}
+                            </p>
+                          ) : null}
+                          {editingMessageId === m.id ? (
+                            <div className="mb-1 flex items-center gap-2">
+                              <input
+                                value={editDraft}
+                                onChange={(e) => setEditDraft(e.target.value)}
+                                className="w-full rounded border border-[#d1d7db] bg-white px-2 py-1 text-sm outline-none"
+                                maxLength={2000}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => void saveEditMessage(m.id)}
+                                disabled={Boolean(messageBusyIds[m.id]) || !editDraft.trim()}
+                                className="rounded bg-[#008069] px-2 py-1 text-xs text-white disabled:opacity-50"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEditMessage}
+                                disabled={Boolean(messageBusyIds[m.id])}
+                                className="rounded bg-zinc-500 px-2 py-1 text-xs text-white disabled:opacity-50"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <p
+                              className={`whitespace-pre-wrap wrap-break-word ${
+                                m.deleted ? "italic text-zinc-500" : ""
+                              }`}
+                            >
+                              {m.deleted ? "Message deleted" : m.text}
+                            </p>
+                          )}
+                          {m.outbound && !m.pending && !m.deleted ? (
+                            <div className="mt-1 flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => startEditMessage(m)}
+                                disabled={Boolean(messageBusyIds[m.id])}
+                                className="text-[11px] font-medium text-[#0b5b50] hover:underline disabled:opacity-50"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleDeleteMessage(m.id)}
+                                disabled={Boolean(messageBusyIds[m.id])}
+                                className="text-[11px] font-medium text-red-600 hover:underline disabled:opacity-50"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          ) : null}
                           <p className="mt-0.5 text-right text-[11px] text-[#667781]">
                             {formatMessageTime(m.createdAt)}
-                            {m.pending ? " · sending" : ""}
+                            {m.pending
+                              ? " · sending"
+                              : m.status
+                                ? ` · ${m.status.toLowerCase()}`
+                                : ""}
                           </p>
                         </div>
                       </li>
