@@ -2,6 +2,17 @@
 
 import axios from "axios";
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  MessageSquare,
+  MoreHorizontal,
+  Paperclip,
+  Phone,
+  Search,
+  SendHorizontal,
+  Smile,
+  Video,
+} from "@/lib/icons";
 import { useAppTheme } from "@/components/app-theme-provider";
 import { LogoutButton } from "@/components/logout-button";
 import {
@@ -62,81 +73,6 @@ type ChatMessage = {
   createdAt?: string;
   status?: string;
 };
-
-function IconSearch({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      width="18"
-      height="18"
-      fill="currentColor"
-      aria-hidden
-    >
-      <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
-    </svg>
-  );
-}
-
-function IconSend({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      width="22"
-      height="22"
-      fill="currentColor"
-      aria-hidden
-    >
-      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-    </svg>
-  );
-}
-
-function IconAttach({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      width="24"
-      height="24"
-      fill="currentColor"
-      aria-hidden
-    >
-      <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5a2.5 2.5 0 0 1 5 0v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5a2.5 2.5 0 0 0 5 0V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z" />
-    </svg>
-  );
-}
-
-function IconEmoji({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      width="24"
-      height="24"
-      fill="currentColor"
-      aria-hidden
-    >
-      <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z" />
-    </svg>
-  );
-}
-
-function IconBack({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      width="24"
-      height="24"
-      fill="currentColor"
-      aria-hidden
-    >
-      <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
-    </svg>
-  );
-}
 
 function MessageStatusTick({ status }: { status?: string }) {
   if (!status) return null;
@@ -1253,7 +1189,7 @@ export default function ChatPage() {
         <div className="shrink-0 bg-zinc-50/70 px-3 py-2 dark:bg-zinc-900/40">
           <form onSubmit={handleSearch} className="flex gap-2">
             <div className="flex min-w-0 flex-1 items-center gap-3 rounded-lg bg-white px-3 py-1.5 shadow-sm">
-              <IconSearch className="shrink-0 text-zinc-500" />
+              <Search className="h-[18px] w-[18px] shrink-0 text-zinc-500" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -1448,7 +1384,7 @@ export default function ChatPage() {
                 className="rounded-full p-2 hover:bg-white/10 md:hidden"
                 aria-label="Back to chats"
               >
-                <IconBack />
+                <ArrowLeft className="h-6 w-6" />
               </button>
               <Avatar label={selectedChat.name} size="sm" />
               <div className="min-w-0 flex-1">
@@ -1477,7 +1413,7 @@ export default function ChatPage() {
                     className="rounded-full px-2 py-1 text-xl leading-none hover:bg-zinc-100 dark:hover:bg-zinc-800"
                     aria-label="Group actions"
                   >
-                    ⋯
+                    <MoreHorizontal className="h-5 w-5" />
                   </button>
                   {groupMenuOpen ? (
                     <div className="absolute right-0 top-9 z-20 w-40 rounded-md border border-zinc-200 bg-white py-1 text-sm text-zinc-900 shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
@@ -1524,14 +1460,10 @@ export default function ChatPage() {
               ) : null}
               <div className="hidden items-center gap-1 sm:flex">
                 <span className="rounded-full p-2 opacity-90 hover:bg-white/10">
-                  <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
-                    <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
-                  </svg>
+                  <Phone className="h-[22px] w-[22px]" />
                 </span>
                 <span className="rounded-full p-2 opacity-90 hover:bg-white/10">
-                  <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
-                    <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z" />
-                  </svg>
+                  <Video className="h-[22px] w-[22px]" />
                 </span>
               </div>
             </header>
@@ -1666,14 +1598,14 @@ export default function ChatPage() {
                   className="mb-1 shrink-0 rounded-full p-2 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
                   aria-label="Attach"
                 >
-                  <IconAttach />
+                  <Paperclip className="h-6 w-6" />
                 </button>
                 <button
                   type="button"
                   className="mb-1 shrink-0 rounded-full p-2 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
                   aria-label="Emoji"
                 >
-                  <IconEmoji />
+                  <Smile className="h-6 w-6" />
                 </button>
                 <div className="mb-1 flex min-h-[42px] min-w-0 flex-1 items-center rounded-lg bg-white px-3 py-1 shadow-sm">
                   <input
@@ -1692,7 +1624,7 @@ export default function ChatPage() {
                   }
                   aria-label="Send"
                 >
-                  <IconSend className="ml-0.5" />
+                  <SendHorizontal className="ml-0.5 h-[22px] w-[22px]" />
                 </button>
               </form>
             </footer>
@@ -1700,14 +1632,7 @@ export default function ChatPage() {
         ) : (
           <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center bg-zinc-50 px-8 text-center dark:bg-zinc-950">
             <div className="rounded-full border-2 border-dashed border-(--accent-500)/45 p-10">
-              <svg
-                viewBox="0 0 24 24"
-                className="mx-auto h-24 w-24 text-(--accent-500)"
-                fill="currentColor"
-                aria-hidden
-              >
-                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
-              </svg>
+              <MessageSquare className="mx-auto h-24 w-24 text-(--accent-500)" />
             </div>
             <h2 className="mt-8 text-[32px] font-light text-zinc-700 dark:text-zinc-200">
               ChatApp Web
