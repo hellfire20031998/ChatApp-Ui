@@ -1304,8 +1304,8 @@ export default function ChatPage() {
 
         <div className="shrink-0 bg-zinc-50/70 px-3 py-2 dark:bg-zinc-900/40">
           <form onSubmit={handleSearch} className="flex gap-2">
-            <div className="flex min-w-0 flex-1 items-center gap-3 rounded-lg bg-white px-3 py-1.5 shadow-sm">
-              <Search className="h-[18px] w-[18px] shrink-0 text-zinc-500" />
+            <div className="flex min-w-0 flex-1 items-center gap-3 rounded-lg border border-transparent bg-white px-3 py-1.5 shadow-sm dark:border-zinc-700 dark:bg-zinc-800">
+              <Search className="h-[18px] w-[18px] shrink-0 text-zinc-500 dark:text-zinc-400" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -1654,7 +1654,7 @@ export default function ChatPage() {
                               <input
                                 value={editDraft}
                                 onChange={(e) => setEditDraft(e.target.value)}
-                                className="w-full rounded border border-[#d1d7db] bg-white px-2 py-1 text-sm outline-none"
+                                className="w-full rounded border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-400"
                                 maxLength={2000}
                               />
                               <button
@@ -1758,7 +1758,7 @@ export default function ChatPage() {
                     </div>
                   ) : null}
                 </div>
-                <div className="mb-1 flex min-h-[42px] min-w-0 flex-1 items-center rounded-lg bg-white px-3 py-1 shadow-sm">
+                <div className="mb-1 flex min-h-[42px] min-w-0 flex-1 items-center rounded-lg border border-transparent bg-white px-3 py-1 shadow-sm dark:border-zinc-700 dark:bg-zinc-800">
                   <input
                     ref={draftInputRef}
                     value={draft}
@@ -1926,7 +1926,7 @@ export default function ChatPage() {
             value={groupNameDraft}
             onChange={(e) => setGroupNameDraft(e.target.value)}
             placeholder="Group name"
-            className="mt-3 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            className="mt-3 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-400"
           />
           <div className="mt-3 max-h-56 overflow-y-auto rounded-md border border-zinc-200 dark:border-zinc-700">
             {users.length === 0 ? (
