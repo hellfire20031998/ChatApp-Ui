@@ -8,7 +8,7 @@ import { persistAuthSession } from "@/lib/auth-storage";
 import { login, register } from "@/service/api";
 
 const inputClass =
-  "mt-3 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-zinc-400 placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-500";
+  "mt-2 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none ring-emerald-400 placeholder:text-zinc-400 focus:border-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-emerald-500";
 
 export default function AuthPage() {
   const router = useRouter();
@@ -73,11 +73,19 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="flex min-h-full flex-1 items-center justify-center bg-zinc-100 px-4 py-12 dark:bg-zinc-900">
-      <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-        <h1 className="text-center text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+    <div className="flex min-h-full flex-1 items-center justify-center bg-linear-to-b from-emerald-50 to-zinc-100 px-4 py-12 dark:from-zinc-950 dark:to-black">
+      <div className="w-full max-w-md rounded-3xl border border-zinc-200 bg-white p-8 shadow-lg shadow-zinc-200/60 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
+        <p className="text-center text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+          Welcome to ChatApp
+        </p>
+        <h1 className="mt-2 text-center text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
           {isLogin ? "Sign in" : "Create account"}
         </h1>
+        <p className="mt-1 text-center text-sm text-zinc-500 dark:text-zinc-400">
+          {isLogin
+            ? "Continue to your conversations"
+            : "Create an account to start chatting"}
+        </p>
 
         {error ? (
           <p
@@ -104,7 +112,7 @@ export default function AuthPage() {
                   onChange={handleChange}
                 />
               </label>
-              <label className="mt-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="mt-3 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Username
                 <input
                   name="username"
@@ -151,7 +159,7 @@ export default function AuthPage() {
           <button
             type="submit"
             disabled={pending}
-            className="mt-6 w-full rounded-lg bg-zinc-900 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            className="mt-6 w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-500 dark:hover:bg-emerald-400"
           >
             {pending ? "Please wait…" : isLogin ? "Sign in" : "Sign up"}
           </button>

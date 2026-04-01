@@ -10,6 +10,7 @@ import {
   sendDeliveredReceipt,
   sendMessage,
   sendReadReceipt,
+  sendTypingEvent,
   type ChatSocketPayload,
   type SocketStatus,
 } from "@/lib/socket";
@@ -118,6 +119,25 @@ function IconBack({ className }: { className?: string }) {
     >
       <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
     </svg>
+  );
+}
+
+function MessageStatusTick({ status }: { status?: string }) {
+  if (!status) return null;
+  const normalized = status.toUpperCase();
+  if (normalized === "SENT") {
+    return <span className="ml-1 text-[11px] text-[#667781]">✓</span>;
+  }
+  if (normalized === "DELIVERED") {
+    return <span className="ml-1 text-[11px] text-[#667781]">✓✓</span>;
+  }
+  if (normalized === "READ") {
+    return <span className="ml-1 text-[11px] text-[#34b7f1]">✓✓</span>;
+  }
+  return (
+    <span className="ml-1 text-[11px] text-[#667781]">
+      {normalized.toLowerCase()}
+    </span>
   );
 }
 
@@ -300,12 +320,15 @@ export default function ChatPage() {
   const [messageBusyIds, setMessageBusyIds] = useState<Record<string, boolean>>(
     {},
   );
+  const [typingByChat, setTypingByChat] = useState<Record<string, boolean>>({});
 
   const activeChatIdRef = useRef<string | null>(null);
   const selfUserIdRef = useRef<string | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const isPrependingRef = useRef(false);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingActiveRef = useRef(false);
 
   useEffect(() => {
     activeChatIdRef.current = selectedChat?.chatId ?? null;
@@ -317,16 +340,24 @@ export default function ChatPage() {
 
     const onIncoming = (payload: ChatSocketPayload) => {
       const activeId = activeChatIdRef.current;
+      if (payload.eventType === "TYPING") {
+        const selfId = selfUserIdRef.current ?? "";
+        if (!payload.chatId || payload.senderId === selfId) return;
+        setTypingByChat((prev) => ({ ...prev, [payload.chatId]: Boolean(payload.typing) }));
+        return;
+      }
 
       const selfId = selfUserIdRef.current ?? "";
       const isOwnMessage = Boolean(selfId) && payload.senderId === selfId;
       const isActiveChat = Boolean(activeId) && payload.chatId === activeId;
+      const status = payload.status?.toUpperCase();
+      const isNewIncomingMessage = !isOwnMessage && status === "SENT";
 
       setChats((prev) =>
         prev.map((c) => {
           if (c.id !== payload.chatId) return c;
           const nextUnread =
-            !isOwnMessage && !isActiveChat ? c.unreadCount + 1 : c.unreadCount;
+            isNewIncomingMessage && !isActiveChat ? c.unreadCount + 1 : c.unreadCount;
           return {
             ...c,
             lastMessage: payload.deleted ? "Message deleted" : payload.content,
@@ -337,10 +368,11 @@ export default function ChatPage() {
         }),
       );
 
-      if (!isOwnMessage && payload.id) {
+      if (isNewIncomingMessage && payload.id) {
         sendDeliveredReceipt({ messageId: payload.id, chatId: payload.chatId });
         if (isActiveChat) {
           sendReadReceipt({ messageId: payload.id, chatId: payload.chatId });
+          setTypingByChat((prev) => ({ ...prev, [payload.chatId]: false }));
         }
       }
 
@@ -604,6 +636,7 @@ export default function ChatPage() {
 
   const handleSelectExistingChat = (chat: MyChatSummary) => {
     setError(null);
+    setTypingByChat((prev) => ({ ...prev, [chat.id]: false }));
     setChats((prev) =>
       prev.map((c) => (c.id === chat.id ? { ...c, unreadCount: 0 } : c)),
     );
@@ -637,6 +670,18 @@ export default function ChatPage() {
         createdAt: new Date().toISOString(),
       },
     ]);
+    if (typingActiveRef.current) {
+      sendTypingEvent({
+        chatId: selectedChat.chatId,
+        receiverId: selectedChat.userId,
+        typing: false,
+      });
+      typingActiveRef.current = false;
+    }
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
     setDraft("");
 
     const sent = sendMessage({
@@ -653,8 +698,59 @@ export default function ChatPage() {
   };
 
   const closeChatMobile = () => {
+    if (typingActiveRef.current && selectedChat?.chatId && selectedChat.userId) {
+      sendTypingEvent({
+        chatId: selectedChat.chatId,
+        receiverId: selectedChat.userId,
+        typing: false,
+      });
+      typingActiveRef.current = false;
+    }
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
     setSelectedChat(null);
   };
+
+  const handleDraftChange = (value: string) => {
+    setDraft(value);
+    if (!selectedChat?.chatId || !selectedChat.userId || socketStatus !== "connected") return;
+    const text = value.trim();
+    if (text.length > 0 && !typingActiveRef.current) {
+      sendTypingEvent({
+        chatId: selectedChat.chatId,
+        receiverId: selectedChat.userId,
+        typing: true,
+      });
+      typingActiveRef.current = true;
+    }
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      if (!typingActiveRef.current) return;
+      sendTypingEvent({
+        chatId: selectedChat.chatId,
+        receiverId: selectedChat.userId,
+        typing: false,
+      });
+      typingActiveRef.current = false;
+    }, 1200);
+    if (text.length === 0 && typingActiveRef.current) {
+      sendTypingEvent({
+        chatId: selectedChat.chatId,
+        receiverId: selectedChat.userId,
+        typing: false,
+      });
+      typingActiveRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    };
+  }, []);
 
   const startEditMessage = (message: ChatMessage) => {
     setEditingMessageId(message.id);
@@ -783,6 +879,27 @@ export default function ChatPage() {
     if (isPrependingRef.current) return;
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (socketStatus !== "connected") return;
+    const chatId = selectedChat?.chatId;
+    if (!chatId) return;
+    const toMarkRead = messages.filter(
+      (m) =>
+        m.chatId === chatId &&
+        !m.outbound &&
+        !m.deleted &&
+        Boolean(m.id) &&
+        m.status?.toUpperCase() !== "READ",
+    );
+    if (toMarkRead.length === 0) return;
+    toMarkRead.forEach((m) => {
+      sendReadReceipt({ messageId: m.id, chatId });
+    });
+    setChats((prev) =>
+      prev.map((c) => (c.id === chatId ? { ...c, unreadCount: 0 } : c)),
+    );
+  }, [messages, selectedChat?.chatId, socketStatus]);
 
   const sidebarHiddenOnMobile = selectedChat !== null;
 
@@ -955,7 +1072,9 @@ export default function ChatPage() {
                   {selectedChat.name}
                 </p>
                 <p className="truncate text-xs text-white/85">
-                  {socketStatus === "connected"
+                  {typingByChat[selectedChat.chatId]
+                    ? `${selectedChat.name} is typing...`
+                    : socketStatus === "connected"
                     ? "Connected · live messages"
                     : socketStatus === "connecting"
                       ? "Connecting…"
@@ -1016,7 +1135,7 @@ export default function ChatPage() {
                         className={`flex ${m.outbound ? "justify-end" : "justify-start"}`}
                       >
                         <div
-                          className={`max-w-[75%] rounded-lg px-3 py-2 text-[14.2px] leading-snug shadow-sm ${
+                          className={`max-w-[85%] sm:max-w-[75%] rounded-lg px-3 py-2 text-[14.2px] leading-snug shadow-sm ${
                             m.outbound
                               ? "rounded-br-none bg-[#d9fdd3] text-[#111b21]"
                               : "rounded-bl-none bg-white text-[#111b21]"
@@ -1054,7 +1173,7 @@ export default function ChatPage() {
                             </div>
                           ) : (
                             <p
-                              className={`whitespace-pre-wrap wrap-break-word ${
+                              className={`wrap-break-word whitespace-pre-wrap ${
                                 m.deleted ? "italic text-zinc-500" : ""
                               }`}
                             >
@@ -1081,13 +1200,13 @@ export default function ChatPage() {
                               </button>
                             </div>
                           ) : null}
-                          <p className="mt-0.5 text-right text-[11px] text-[#667781]">
-                            {formatMessageTime(m.createdAt)}
-                            {m.pending
-                              ? " · sending"
-                              : m.status
-                                ? ` · ${m.status.toLowerCase()}`
-                                : ""}
+                          <p className="mt-0.5 flex items-center justify-end text-[11px] text-[#667781]">
+                            <span>{formatMessageTime(m.createdAt)}</span>
+                            {m.pending ? (
+                              <span className="ml-1">sending</span>
+                            ) : m.outbound ? (
+                              <MessageStatusTick status={m.status} />
+                            ) : null}
                           </p>
                         </div>
                       </li>
@@ -1100,7 +1219,7 @@ export default function ChatPage() {
               </div>
             </div>
 
-            <footer className="shrink-0 bg-[#f0f2f5] px-2 py-2 md:px-4">
+            <footer className="shrink-0 bg-[#f0f2f5] px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:px-4">
               <form
                 onSubmit={handleSend}
                 className="flex items-end gap-2"
@@ -1122,7 +1241,7 @@ export default function ChatPage() {
                 <div className="mb-1 flex min-h-[42px] min-w-0 flex-1 items-center rounded-lg bg-white px-3 py-1 shadow-sm">
                   <input
                     value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
+                    onChange={(e) => handleDraftChange(e.target.value)}
                     placeholder="Type a message"
                     className="min-h-[36px] w-full bg-transparent py-2 text-[15px] text-[#111b21] placeholder:text-[#667781] outline-none"
                   />

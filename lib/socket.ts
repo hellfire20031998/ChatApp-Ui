@@ -29,6 +29,10 @@ function readDestination(): string {
   return process.env.NEXT_PUBLIC_STOMP_READ_DESTINATION ?? "/app/chat.read";
 }
 
+function typingDestination(): string {
+  return process.env.NEXT_PUBLIC_STOMP_TYPING_DESTINATION ?? "/app/chat.typing";
+}
+
 function readToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("token");
@@ -53,9 +57,17 @@ type MessageReceipt = {
   chatId: string;
 };
 
+type TypingEvent = {
+  chatId: string;
+  receiverId: string;
+  typing: boolean;
+};
+
 export type ChatSocketPayload = {
+  eventType?: string;
   chatId: string;
   content: string;
+  typing?: boolean;
   senderId?: string;
   senderUsername?: string;
   receiverId?: string;
@@ -128,6 +140,7 @@ function normalizeIncomingPayload(parsed: unknown): ChatSocketPayload | null {
         : undefined;
 
   return {
+    eventType: typeof o.eventType === "string" ? o.eventType : undefined,
     chatId: String(o.chatId),
     content,
     senderId:
@@ -140,6 +153,7 @@ function normalizeIncomingPayload(parsed: unknown): ChatSocketPayload | null {
     receiverId: o.receiverId != null ? String(o.receiverId) : undefined,
     type: typeof o.type === "string" ? o.type : undefined,
     status: typeof o.status === "string" ? o.status : undefined,
+    typing: typeof o.typing === "boolean" ? o.typing : undefined,
     id: o.id != null ? String(o.id) : undefined,
     createdAt,
     updatedAt: o.updatedAt != null ? String(o.updatedAt) : undefined,
@@ -298,6 +312,16 @@ export function sendDeliveredReceipt(receipt: MessageReceipt): boolean {
 
 export function sendReadReceipt(receipt: MessageReceipt): boolean {
   return sendReceipt(readDestination(), receipt);
+}
+
+export function sendTypingEvent(event: TypingEvent): boolean {
+  if (!stompClient?.connected) return false;
+  stompClient.publish({
+    destination: typingDestination(),
+    body: JSON.stringify(event),
+    headers: { "content-type": "application/json" },
+  });
+  return true;
 }
 
 export function disconnectSocket(): void {
