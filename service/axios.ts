@@ -12,11 +12,15 @@ const axiosInstance = axios.create({
 });
 
 axiosInstance.interceptors.request.use((config) => {
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const path = config.url ?? "";
+  const isAuthRoute = path === "/auth" || path.startsWith("/auth/");
 
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  if (!isAuthRoute) {
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
 
   return config;
@@ -30,17 +34,24 @@ axiosInstance.interceptors.response.use(
     }
 
     const data = error.response?.data;
-    if (
+    const code =
       data &&
       typeof data === "object" &&
       "errorCode" in data &&
-      (data as { errorCode: unknown }).errorCode === "TOKEN_EXPIRED"
-    ) {
-      if (typeof window !== "undefined") {
-        clearAuthSession();
-        if (!window.location.pathname.startsWith("/auth")) {
-          window.location.assign("/auth");
-        }
+      typeof (data as { errorCode: unknown }).errorCode === "string"
+        ? (data as { errorCode: string }).errorCode
+        : null;
+
+    const reauthCodes = new Set([
+      "TOKEN_EXPIRED",
+      "INVALID_TOKEN",
+      "AUTH_REQUIRED",
+    ]);
+
+    if (code && reauthCodes.has(code) && typeof window !== "undefined") {
+      clearAuthSession();
+      if (!window.location.pathname.startsWith("/auth")) {
+        window.location.assign("/auth");
       }
     }
 

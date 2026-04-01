@@ -1,13 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { LogoutButton } from "@/components/logout-button";
 
 export function HomeNavAuth() {
-  if (typeof window === "undefined") {
+  const [ready, setReady] = useState(false);
+  const [hasToken, setHasToken] = useState(false);
+
+  useEffect(() => {
+    setHasToken(!!localStorage.getItem("token"));
+    setReady(true);
+  }, []);
+
+  if (!ready) {
     return <span className="inline-block h-10 w-32 shrink-0" aria-hidden />;
   }
-  const hasToken = !!localStorage.getItem("token");
 
   if (hasToken) {
     return (
