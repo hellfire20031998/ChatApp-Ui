@@ -33,6 +33,10 @@ function typingDestination(): string {
   return process.env.NEXT_PUBLIC_STOMP_TYPING_DESTINATION ?? "/app/chat.typing";
 }
 
+function callSignalDestination(): string {
+  return process.env.NEXT_PUBLIC_STOMP_CALL_DESTINATION ?? "/app/call.signal";
+}
+
 function readToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("token");
@@ -63,6 +67,12 @@ type TypingEvent = {
   typing: boolean;
 };
 
+export type CallIceCandidate = {
+  candidate: string;
+  sdpMid?: string | null;
+  sdpMLineIndex?: number | null;
+};
+
 export type ChatSocketPayload = {
   eventType?: string;
   chatId: string;
@@ -77,6 +87,13 @@ export type ChatSocketPayload = {
   createdAt?: string;
   updatedAt?: string;
   deleted?: boolean;
+  /** WebRTC signaling (eventType === "CALL") */
+  action?: string;
+  callId?: string;
+  mediaType?: string;
+  sdp?: string;
+  iceCandidate?: CallIceCandidate;
+  fromUserId?: string;
 };
 
 let stompClient: Client | null = null;
@@ -111,6 +128,25 @@ function normalizeIncomingPayload(parsed: unknown): ChatSocketPayload | null {
 
   if (o.chatId === undefined || o.chatId === null) return null;
 
+  const eventType = typeof o.eventType === "string" ? o.eventType : undefined;
+  const iceRaw = o.iceCandidate;
+  let iceCandidate: CallIceCandidate | undefined;
+  if (iceRaw && typeof iceRaw === "object" && iceRaw !== null) {
+    const ic = iceRaw as Record<string, unknown>;
+    if (typeof ic.candidate === "string") {
+      iceCandidate = {
+        candidate: ic.candidate,
+        sdpMid: ic.sdpMid != null ? String(ic.sdpMid) : null,
+        sdpMLineIndex:
+          typeof ic.sdpMLineIndex === "number"
+            ? ic.sdpMLineIndex
+            : ic.sdpMLineIndex != null
+              ? Number(ic.sdpMLineIndex)
+              : null,
+      };
+    }
+  }
+
   const content =
     typeof o.content === "string"
       ? o.content
@@ -140,7 +176,7 @@ function normalizeIncomingPayload(parsed: unknown): ChatSocketPayload | null {
         : undefined;
 
   return {
-    eventType: typeof o.eventType === "string" ? o.eventType : undefined,
+    eventType,
     chatId: String(o.chatId),
     content,
     senderId:
@@ -158,6 +194,12 @@ function normalizeIncomingPayload(parsed: unknown): ChatSocketPayload | null {
     createdAt,
     updatedAt: o.updatedAt != null ? String(o.updatedAt) : undefined,
     deleted: typeof o.deleted === "boolean" ? o.deleted : undefined,
+    action: typeof o.action === "string" ? o.action : undefined,
+    callId: o.callId != null ? String(o.callId) : undefined,
+    mediaType: typeof o.mediaType === "string" ? o.mediaType : undefined,
+    sdp: typeof o.sdp === "string" ? o.sdp : undefined,
+    iceCandidate,
+    fromUserId: o.fromUserId != null ? String(o.fromUserId) : undefined,
   };
 }
 
@@ -319,6 +361,28 @@ export function sendTypingEvent(event: TypingEvent): boolean {
   stompClient.publish({
     destination: typingDestination(),
     body: JSON.stringify(event),
+    headers: { "content-type": "application/json" },
+  });
+  return true;
+}
+
+export type OutgoingCallSignal = {
+  action: string;
+  chatId: string;
+  callId: string;
+  mediaType: "AUDIO" | "VIDEO";
+  sdp?: string;
+  iceCandidate?: CallIceCandidate;
+};
+
+export function sendCallSignal(payload: OutgoingCallSignal): boolean {
+  if (!stompClient?.connected) {
+    console.warn("[socket] sendCallSignal: not connected");
+    return false;
+  }
+  stompClient.publish({
+    destination: callSignalDestination(),
+    body: JSON.stringify(payload),
     headers: { "content-type": "application/json" },
   });
   return true;

@@ -5,17 +5,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   MessageSquare,
+  Mic,
+  MicOff,
   MoreHorizontal,
   Paperclip,
   Phone,
+  PhoneOff,
   Search,
   SendHorizontal,
   Smile,
   Video,
+  VideoOff,
 } from "@/lib/icons";
 import { ChatEmojiPicker } from "@/components/chat-emoji-picker";
 import { useAppTheme } from "@/components/app-theme-provider";
 import { LogoutButton } from "@/components/logout-button";
+import { useWebRtcCall } from "@/hooks/use-webrtc-call";
 import {
   connectSocket,
   disconnectSocket,
@@ -328,6 +333,51 @@ export default function ChatPage() {
       : "light";
   }, [preference.themeMode]);
 
+  const webrtcCallHandlerRef = useRef<(p: ChatSocketPayload) => void>(() => {});
+
+  const getDisplayNameForChat = useCallback((chatId: string) => {
+    const c = chats.find((x) => x.id === chatId);
+    return c ? chatPeerDisplayName(c) : "Someone";
+  }, [chats]);
+
+  const webrtc = useWebRtcCall({
+    chatId: selectedChat?.chatId ?? null,
+    peerUserId: selectedChat?.userId ?? null,
+    isGroup: Boolean(selectedChat?.group),
+    selfUserId: readUserIdFromToken(),
+    getDisplayNameForChat,
+  });
+
+  useEffect(() => {
+    webrtcCallHandlerRef.current = webrtc.handleRemoteSignal;
+  }, [webrtc.handleRemoteSignal]);
+
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const stream = webrtc.remoteStream;
+    if (!stream) return;
+    const v = remoteVideoRef.current;
+    const a = remoteAudioRef.current;
+    if (stream.getVideoTracks().length > 0 && v) {
+      v.srcObject = stream;
+      void v.play().catch(() => {});
+    } else if (a) {
+      a.srcObject = stream;
+      void a.play().catch(() => {});
+    }
+  }, [webrtc.remoteStream]);
+
+  useEffect(() => {
+    const el = localVideoRef.current;
+    if (el && webrtc.localStream) {
+      el.srcObject = webrtc.localStream;
+      void el.play().catch(() => {});
+    }
+  }, [webrtc.localStream]);
+
   const applyPreference = useCallback(
     async (next: UserPreference) => {
       const previous = preference;
@@ -404,6 +454,10 @@ export default function ChatPage() {
 
     const onIncoming = (payload: ChatSocketPayload) => {
       const activeId = activeChatIdRef.current;
+      if (payload.eventType === "CALL") {
+        webrtcCallHandlerRef.current(payload);
+        return;
+      }
       if (payload.eventType === "TYPING") {
         const selfId = selfUserIdRef.current ?? "";
         if (!payload.chatId || payload.senderId === selfId) return;
@@ -1520,14 +1574,32 @@ export default function ChatPage() {
                   ) : null}
                 </div>
               ) : null}
-              <div className="hidden items-center gap-1 sm:flex">
-                <span className="rounded-full p-2 opacity-90 hover:bg-white/10">
-                  <Phone className="h-[22px] w-[22px]" />
-                </span>
-                <span className="rounded-full p-2 opacity-90 hover:bg-white/10">
-                  <Video className="h-[22px] w-[22px]" />
-                </span>
-              </div>
+              {!selectedChat.group && selectedChat.userId ? (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => void webrtc.startCall("AUDIO")}
+                    disabled={
+                      webrtc.callPhase !== "idle" || socketStatus !== "connected"
+                    }
+                    className="rounded-full p-2 text-zinc-600 opacity-90 hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    aria-label="Voice call"
+                  >
+                    <Phone className="h-[22px] w-[22px]" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void webrtc.startCall("VIDEO")}
+                    disabled={
+                      webrtc.callPhase !== "idle" || socketStatus !== "connected"
+                    }
+                    className="rounded-full p-2 text-zinc-600 opacity-90 hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    aria-label="Video call"
+                  >
+                    <Video className="h-[22px] w-[22px]" />
+                  </button>
+                </div>
+              ) : null}
             </header>
 
             <div
@@ -1725,6 +1797,124 @@ export default function ChatPage() {
         )}
       </section>
     </div>
+    {webrtc.callPhase !== "idle" ? (
+      <div className="fixed inset-0 z-[60] flex flex-col bg-zinc-950/95 text-white">
+        <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
+        {webrtc.callError ? (
+          <p className="bg-red-600/90 px-4 py-2 text-center text-sm">{webrtc.callError}</p>
+        ) : null}
+        {webrtc.callPhase === "incoming" && webrtc.incoming ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6">
+            <p className="text-sm text-zinc-400">Incoming call</p>
+            <p className="text-2xl font-semibold">{webrtc.incoming.displayName}</p>
+            <p className="text-zinc-400">
+              {webrtc.incoming.mediaType === "VIDEO" ? "Video" : "Voice"}
+            </p>
+            <div className="flex gap-4">
+              <button
+                type="button"
+                onClick={() => void webrtc.acceptCall()}
+                className="rounded-full bg-(--accent-500) px-8 py-3 text-sm font-medium hover:bg-(--accent-600)"
+              >
+                Accept
+              </button>
+              <button
+                type="button"
+                onClick={() => webrtc.rejectCall()}
+                className="rounded-full bg-red-600 px-8 py-3 text-sm font-medium hover:bg-red-500"
+              >
+                Decline
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {webrtc.callPhase === "outgoing" ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6">
+            <p className="text-sm text-zinc-400">Calling…</p>
+            <p className="text-2xl font-semibold">
+              {selectedChat?.name ?? "Contact"}
+            </p>
+            <button
+              type="button"
+              onClick={() => webrtc.cancelOutgoing()}
+              className="rounded-full border border-white/30 px-8 py-3 text-sm hover:bg-white/10"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
+        {webrtc.callPhase === "connecting" ? (
+          <div className="flex flex-1 items-center justify-center text-zinc-400">
+            Connecting…
+          </div>
+        ) : null}
+        {webrtc.callPhase === "connected" ? (
+          <div className="relative flex min-h-0 flex-1 flex-col">
+            {webrtc.remoteStream &&
+            webrtc.remoteStream.getVideoTracks().length > 0 ? (
+              <video
+                ref={remoteVideoRef}
+                className="h-full min-h-[200px] w-full flex-1 bg-black object-cover"
+                autoPlay
+                playsInline
+              />
+            ) : (
+              <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-zinc-900">
+                <Phone className="h-16 w-16 text-zinc-500" />
+                <p className="text-lg text-zinc-300">{selectedChat?.name}</p>
+              </div>
+            )}
+            {webrtc.localStream &&
+            webrtc.localStream.getVideoTracks().length > 0 ? (
+              <video
+                ref={localVideoRef}
+                className="absolute bottom-24 right-4 h-28 w-36 rounded-lg border border-white/20 bg-black object-cover shadow-xl sm:h-36 sm:w-48"
+                autoPlay
+                playsInline
+                muted
+              />
+            ) : null}
+            <div className="flex shrink-0 items-center justify-center gap-4 border-t border-white/10 bg-zinc-900/90 py-4">
+              <button
+                type="button"
+                onClick={() => webrtc.toggleMute()}
+                className="rounded-full bg-white/10 p-4 hover:bg-white/20"
+                aria-label={webrtc.muted ? "Unmute" : "Mute"}
+              >
+                {webrtc.muted ? (
+                  <MicOff className="h-6 w-6" />
+                ) : (
+                  <Mic className="h-6 w-6" />
+                )}
+              </button>
+              {webrtc.localStream &&
+              webrtc.localStream.getVideoTracks().length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => webrtc.toggleVideo()}
+                  className="rounded-full bg-white/10 p-4 hover:bg-white/20"
+                  aria-label={webrtc.videoOff ? "Camera on" : "Camera off"}
+                >
+                  {webrtc.videoOff ? (
+                    <VideoOff className="h-6 w-6" />
+                  ) : (
+                    <Video className="h-6 w-6" />
+                  )}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => webrtc.endCall()}
+                className="rounded-full bg-red-600 p-4 hover:bg-red-500"
+                aria-label="End call"
+              >
+                <PhoneOff className="h-6 w-6" />
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    ) : null}
     {groupModalOpen ? (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
         <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">

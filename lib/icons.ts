@@ -2,11 +2,15 @@
 export {
   ArrowLeft,
   MessageSquare,
+  Mic,
+  MicOff,
   MoreHorizontal,
   Paperclip,
   Phone,
+  PhoneOff,
   Search,
   SendHorizontal,
   Smile,
   Video,
+  VideoOff,
 } from "lucide-react";
