@@ -7,6 +7,7 @@ import type {
   LoginRequest,
   MyChatsPayload,
   RegisterRequest,
+  UserPreference,
 } from "./type";
 
 export const searchUsers = async <T = unknown>(
@@ -122,6 +123,31 @@ export const deleteMessage = async (
 ): Promise<ApiResponse<ChatMessageDto>> => {
   const res = await axiosInstance.delete<ApiResponse<ChatMessageDto>>(
     `/messages/${messageId}`,
+  );
+  return res.data;
+};
+
+export const getUserPreferences = async (): Promise<ApiResponse<UserPreference>> => {
+  const res = await axiosInstance.get<ApiResponse<UserPreference>>(`/users/preferences`);
+  return res.data;
+};
+
+export const updateUserPreferences = async (
+  payload: Partial<UserPreference>,
+): Promise<ApiResponse<UserPreference>> => {
+  const res = await axiosInstance.patch<ApiResponse<UserPreference>>(
+    `/users/preferences`,
+    payload,
+  );
+  return res.data;
+};
+
+export const createUserPreferences = async (
+  payload: Partial<UserPreference>,
+): Promise<ApiResponse<UserPreference>> => {
+  const res = await axiosInstance.post<ApiResponse<UserPreference>>(
+    `/users/preferences`,
+    payload,
   );
   return res.data;
 };

@@ -2,6 +2,7 @@
 
 import axios from "axios";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useAppTheme } from "@/components/app-theme-provider";
 import { LogoutButton } from "@/components/logout-button";
 import {
   connectSocket,
@@ -16,17 +17,26 @@ import {
 } from "@/lib/socket";
 import {
   addGroupMembers,
+  createUserPreferences,
   createGroup,
   deleteMessage,
   getChatMessages,
   getChats,
+  getUserPreferences,
   leaveGroup,
   renameGroup,
   searchUsers,
   startChat,
   updateMessage,
+  updateUserPreferences,
 } from "@/service/api";
-import type { ChatMessageDto, MyChatSummary } from "@/service/type";
+import type {
+  ChatMessageDto,
+  MyChatSummary,
+  ThemeMode,
+  ThemePreset,
+  UserPreference,
+} from "@/service/type";
 
 type UserRow = {
   id: string;
@@ -163,7 +173,7 @@ function Avatar({
         : "h-10 w-10 text-base";
   return (
     <span
-      className={`flex shrink-0 items-center justify-center rounded-full bg-emerald-100 font-medium text-emerald-800 ${sizeClass}`}
+      className={`flex shrink-0 items-center justify-center rounded-full bg-(--accent-100) font-medium text-(--accent-600) ${sizeClass}`}
     >
       {initial}
     </span>
@@ -313,7 +323,21 @@ function normalizeMessageDto(
   };
 }
 
+function normalizePreference(input: Partial<UserPreference> | null | undefined): UserPreference {
+  const mode = input?.themeMode;
+  const preset = input?.themePreset;
+  return {
+    themeMode:
+      mode === "LIGHT" || mode === "DARK" || mode === "SYSTEM" ? mode : "SYSTEM",
+    themePreset:
+      preset === "EMERALD" || preset === "OCEAN" || preset === "SUNSET"
+        ? preset
+        : "EMERALD",
+  };
+}
+
 export default function ChatPage() {
+  const { preference, setPreference } = useAppTheme();
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<UserRow[]>([]);
   const [chats, setChats] = useState<MyChatSummary[]>([]);
@@ -343,6 +367,9 @@ export default function ChatPage() {
   const [groupSettingsBusy, setGroupSettingsBusy] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<"chats" | "users">("chats");
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  const [themeBusy, setThemeBusy] = useState(false);
+  const [preferenceInitialized, setPreferenceInitialized] = useState(false);
 
   const activeChatIdRef = useRef<string | null>(null);
   const selfUserIdRef = useRef<string | null>(null);
@@ -352,10 +379,75 @@ export default function ChatPage() {
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingActiveRef = useRef(false);
 
+  const applyPreference = useCallback(
+    async (next: UserPreference) => {
+      const previous = preference;
+      setPreference(next);
+      setThemeBusy(true);
+      try {
+        const updated = preferenceInitialized
+          ? await updateUserPreferences(next)
+          : await createUserPreferences(next);
+        setPreference(normalizePreference(updated.data));
+        setPreferenceInitialized(true);
+      } catch {
+        try {
+          const fallback = preferenceInitialized
+            ? await createUserPreferences(next)
+            : await updateUserPreferences(next);
+          setPreference(normalizePreference(fallback.data));
+          setPreferenceInitialized(true);
+        } catch {
+          setPreference(previous);
+          setError("Failed to save theme settings");
+        }
+      } finally {
+        setThemeBusy(false);
+      }
+    },
+    [preference, preferenceInitialized, setPreference],
+  );
+
+  const onThemeModeChange = useCallback(
+    (mode: ThemeMode) => {
+      if (themeBusy) return;
+      const next = normalizePreference({ ...preference, themeMode: mode });
+      void applyPreference(next);
+    },
+    [applyPreference, preference, themeBusy],
+  );
+
+  const onThemePresetChange = useCallback(
+    (preset: ThemePreset) => {
+      if (themeBusy) return;
+      const next = normalizePreference({ ...preference, themePreset: preset });
+      void applyPreference(next);
+    },
+    [applyPreference, preference, themeBusy],
+  );
+
   useEffect(() => {
     activeChatIdRef.current = selectedChat?.chatId ?? null;
     setGroupMenuOpen(false);
   }, [selectedChat?.chatId]);
+
+  useEffect(() => {
+    let ignore = false;
+    const syncPreference = async () => {
+      try {
+        const res = await getUserPreferences();
+        if (ignore) return;
+        setPreference(normalizePreference(res.data));
+        setPreferenceInitialized(true);
+      } catch {
+        // Ignore silently: local stored preference is already applied.
+      }
+    };
+    void syncPreference();
+    return () => {
+      ignore = true;
+    };
+  }, [setPreference]);
 
   useEffect(() => {
     const userId = readUserIdFromToken() ?? "";
@@ -1088,16 +1180,74 @@ export default function ChatPage() {
 
   return (
     <>
-    <div className="flex h-dvh w-full overflow-hidden bg-linear-to-b from-emerald-50 to-zinc-100 text-zinc-900 antialiased dark:from-zinc-950 dark:to-black dark:text-zinc-50">
+    <div className="flex h-dvh w-full overflow-hidden bg-linear-to-b from-(--accent-100) to-zinc-100 text-zinc-900 antialiased dark:from-zinc-950 dark:to-black dark:text-zinc-50">
       {/* —— Sidebar (chat list) —— */}
       <aside
         className={`flex min-h-0 w-full min-w-0 flex-col border-zinc-200/80 bg-white/80 backdrop-blur md:w-[400px] md:max-w-[40vw] md:border-r dark:border-zinc-800 dark:bg-zinc-900/80 ${sidebarHiddenOnMobile ? "hidden md:flex" : "flex"}`}
       >
         <header className="flex h-[60px] shrink-0 items-center justify-between gap-3 border-b border-zinc-200/80 bg-white/90 px-4 text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
           <h1 className="text-xl font-medium tracking-tight">Chats</h1>
-          <LogoutButton className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800">
-            Log out
-          </LogoutButton>
+          <div className="relative flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setThemeMenuOpen((v) => !v)}
+              className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
+            >
+              Theme
+            </button>
+            <LogoutButton className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800">
+              Log out
+            </LogoutButton>
+            {themeMenuOpen ? (
+              <div className="absolute right-0 top-11 z-30 w-64 rounded-xl border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Theme mode
+                </p>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {(["LIGHT", "DARK", "SYSTEM"] as ThemeMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => onThemeModeChange(mode)}
+                      disabled={themeBusy}
+                      className={`rounded-md border px-2 py-1.5 text-xs font-medium transition ${
+                        preference.themeMode === mode
+                          ? "border-(--accent-500) bg-(--accent-100) text-(--accent-600)"
+                          : "border-zinc-200 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      }`}
+                    >
+                      {mode.toLowerCase()}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Theme accent
+                </p>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {(["EMERALD", "OCEAN", "SUNSET"] as ThemePreset[]).map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => onThemePresetChange(preset)}
+                      disabled={themeBusy}
+                      className={`rounded-md border px-2 py-1.5 text-xs font-medium transition ${
+                        preference.themePreset === preset
+                          ? "border-(--accent-500) bg-(--accent-100) text-(--accent-600)"
+                          : "border-zinc-200 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      }`}
+                    >
+                      {preset.toLowerCase()}
+                    </button>
+                  ))}
+                </div>
+                {themeBusy ? (
+                  <p className="mt-3 text-[11px] text-zinc-500 dark:text-zinc-400">
+                    Saving theme...
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </header>
 
         <div className="shrink-0 bg-zinc-50/70 px-3 py-2 dark:bg-zinc-900/40">
@@ -1114,14 +1264,14 @@ export default function ChatPage() {
             <button
               type="submit"
               disabled={searchBusy}
-              className="shrink-0 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50"
+              className="shrink-0 rounded-lg bg-(--accent-500) px-4 py-2 text-sm font-medium text-white transition hover:bg-(--accent-600) disabled:opacity-50"
             >
               {searchBusy ? "…" : "Search"}
             </button>
             <button
               type="button"
               onClick={() => setGroupModalOpen(true)}
-              className="shrink-0 rounded-lg border border-emerald-600 bg-white px-3 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 dark:bg-zinc-900 dark:text-emerald-300 dark:hover:bg-zinc-800"
+              className="shrink-0 rounded-lg border border-(--accent-500) bg-white px-3 py-2 text-sm font-medium text-(--accent-600) transition hover:bg-(--accent-100) dark:bg-zinc-900 dark:hover:bg-zinc-800"
             >
               New group
             </button>
@@ -1132,7 +1282,7 @@ export default function ChatPage() {
               onClick={() => setSidebarTab("chats")}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
                 sidebarTab === "chats"
-                  ? "bg-emerald-600 text-white"
+                  ? "bg-(--accent-500) text-white"
                   : "bg-white text-zinc-600 hover:bg-zinc-100 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
               }`}
             >
@@ -1143,7 +1293,7 @@ export default function ChatPage() {
               onClick={() => setSidebarTab("users")}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
                 sidebarTab === "users"
-                  ? "bg-emerald-600 text-white"
+                  ? "bg-(--accent-500) text-white"
                   : "bg-white text-zinc-600 hover:bg-zinc-100 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
               }`}
             >
@@ -1190,7 +1340,7 @@ export default function ChatPage() {
                         <button
                           type="button"
                           onClick={() => handleSelectExistingChat(chat)}
-                          className={`flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-zinc-100/80 dark:hover:bg-zinc-800 ${active ? "bg-emerald-50 dark:bg-zinc-800" : ""}`}
+                          className={`flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-zinc-100/80 dark:hover:bg-zinc-800 ${active ? "bg-(--accent-100) dark:bg-zinc-800" : ""}`}
                         >
                           <Avatar label={title} />
                           <div className="min-w-0 flex-1 border-b border-zinc-100 py-0.5 dark:border-zinc-800">
@@ -1209,7 +1359,7 @@ export default function ChatPage() {
                             </p>
                           </div>
                           {chat.unreadCount > 0 ? (
-                            <span className="shrink-0 self-center rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-medium text-white">
+                            <span className="shrink-0 self-center rounded-full bg-(--accent-500) px-2 py-0.5 text-xs font-medium text-white">
                               {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
                             </span>
                           ) : null}
@@ -1240,7 +1390,7 @@ export default function ChatPage() {
                                 void handleOpenChat(user);
                               }
                             }}
-                            className={`flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-zinc-100/80 disabled:opacity-60 dark:hover:bg-zinc-800 ${active ? "bg-emerald-50 dark:bg-zinc-800" : ""}`}
+                            className={`flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-zinc-100/80 disabled:opacity-60 dark:hover:bg-zinc-800 ${active ? "bg-(--accent-100) dark:bg-zinc-800" : ""}`}
                           >
                             <Avatar label={user.username} />
                             <div className="min-w-0 flex-1 border-b border-zinc-100 pb-3 dark:border-zinc-800">
@@ -1424,12 +1574,12 @@ export default function ChatPage() {
                         <div
                           className={`max-w-[85%] sm:max-w-[75%] rounded-lg px-3 py-2 text-[14.2px] leading-snug shadow-sm ${
                             m.outbound
-                              ? "rounded-br-none bg-emerald-100 text-zinc-900 dark:bg-emerald-900/40 dark:text-zinc-100"
+                              ? "rounded-br-none bg-(--accent-100) text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
                               : "rounded-bl-none bg-white text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100"
-                          } ${m.pending ? "opacity-75 ring-1 ring-emerald-500/25" : ""}`}
+                          } ${m.pending ? "opacity-75 ring-1 ring-(--accent-500)/25" : ""}`}
                         >
                           {!m.outbound && m.senderUsername ? (
-                            <p className="mb-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                            <p className="mb-1 text-xs font-medium text-(--accent-600) dark:text-(--accent-500)">
                               {m.senderUsername}
                             </p>
                           ) : null}
@@ -1445,7 +1595,7 @@ export default function ChatPage() {
                                 type="button"
                                 onClick={() => void saveEditMessage(m.id)}
                                 disabled={Boolean(messageBusyIds[m.id]) || !editDraft.trim()}
-                                className="rounded bg-emerald-600 px-2 py-1 text-xs text-white disabled:opacity-50"
+                                className="rounded bg-(--accent-500) px-2 py-1 text-xs text-white disabled:opacity-50"
                               >
                                 Save
                               </button>
@@ -1473,7 +1623,7 @@ export default function ChatPage() {
                                 type="button"
                                 onClick={() => startEditMessage(m)}
                                 disabled={Boolean(messageBusyIds[m.id])}
-                                className="text-[11px] font-medium text-emerald-700 hover:underline disabled:opacity-50 dark:text-emerald-300"
+                                className="text-[11px] font-medium text-(--accent-600) hover:underline disabled:opacity-50 dark:text-(--accent-500)"
                               >
                                 Edit
                               </button>
@@ -1535,7 +1685,7 @@ export default function ChatPage() {
                 </div>
                 <button
                   type="submit"
-                  className="mb-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-md transition hover:bg-emerald-700 disabled:opacity-40"
+                  className="mb-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-(--accent-500) text-white shadow-md transition hover:bg-(--accent-600) disabled:opacity-40"
                   disabled={
                     !draft.trim() ||
                     socketStatus !== "connected"
@@ -1549,10 +1699,10 @@ export default function ChatPage() {
           </>
         ) : (
           <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center bg-zinc-50 px-8 text-center dark:bg-zinc-950">
-            <div className="rounded-full border-2 border-dashed border-emerald-300/70 p-10 dark:border-emerald-700/50">
+            <div className="rounded-full border-2 border-dashed border-(--accent-500)/45 p-10">
               <svg
                 viewBox="0 0 24 24"
-                className="mx-auto h-24 w-24 text-emerald-600 dark:text-emerald-400"
+                className="mx-auto h-24 w-24 text-(--accent-500)"
                 fill="currentColor"
                 aria-hidden
               >
@@ -1623,7 +1773,7 @@ export default function ChatPage() {
               type="button"
               onClick={() => void handleCreateGroup()}
               disabled={groupBusy}
-              className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+              className="rounded-md bg-(--accent-500) px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
               {groupBusy ? "Creating..." : "Create"}
             </button>

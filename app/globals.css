@@ -1,1 +1,21 @@
 @import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --accent-500: #059669;
+  --accent-600: #047857;
+  --accent-100: #d1fae5;
+}
+
+:root[data-theme-preset="ocean"] {
+  --accent-500: #0ea5e9;
+  --accent-600: #0284c7;
+  --accent-100: #dbeafe;
+}
+
+:root[data-theme-preset="sunset"] {
+  --accent-500: #f97316;
+  --accent-600: #ea580c;
+  --accent-100: #ffedd5;
+}

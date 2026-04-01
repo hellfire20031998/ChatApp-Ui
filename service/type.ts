@@ -29,6 +29,15 @@ export type AuthUser = {
   updatedAt: string;
   deleted: boolean;
   userRole: string | null;
+  userPreference: UserPreference;
+};
+
+export type ThemeMode = "LIGHT" | "DARK" | "SYSTEM";
+export type ThemePreset = "EMERALD" | "OCEAN" | "SUNSET";
+
+export type UserPreference = {
+  themeMode: ThemeMode;
+  themePreset: ThemePreset;
 };
 
 /** `data` for successful auth responses (`token` + `user`). */

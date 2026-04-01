@@ -1,21 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { LogoutButton } from "@/components/logout-button";
 
 export function HomeNavAuth() {
-  const [ready, setReady] = useState(false);
-  const [hasToken, setHasToken] = useState(false);
-
-  useEffect(() => {
-    setHasToken(!!localStorage.getItem("token"));
-    setReady(true);
-  }, []);
-
-  if (!ready) {
+  if (typeof window === "undefined") {
     return <span className="inline-block h-10 w-32 shrink-0" aria-hidden />;
   }
+  const hasToken = !!localStorage.getItem("token");
 
   if (hasToken) {
     return (
@@ -26,7 +18,7 @@ export function HomeNavAuth() {
         >
           Open chat
         </Link>
-        <LogoutButton className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400">
+        <LogoutButton className="rounded-full bg-(--accent-500) px-4 py-2 text-sm font-medium text-white transition hover:bg-(--accent-600)">
           Log out
         </LogoutButton>
       </div>
@@ -36,7 +28,7 @@ export function HomeNavAuth() {
   return (
     <Link
       href="/auth"
-      className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400"
+      className="rounded-full bg-(--accent-500) px-4 py-2 text-sm font-medium text-white transition hover:bg-(--accent-600)"
     >
       Sign In
     </Link>

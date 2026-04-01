@@ -3,7 +3,7 @@ import { HomeNavAuth } from "@/components/home-nav-auth";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-linear-to-b from-emerald-50 via-white to-zinc-100 text-zinc-900 dark:from-zinc-950 dark:via-black dark:to-zinc-950 dark:text-zinc-50">
+    <div className="min-h-screen bg-linear-to-b from-(--accent-100) via-white to-zinc-100 text-zinc-900 dark:from-zinc-950 dark:via-black dark:to-zinc-950 dark:text-zinc-50">
 
       {/* Navbar */}
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
@@ -14,7 +14,7 @@ export default function Home() {
       {/* Hero Section */}
       <section className="mx-auto grid max-w-6xl items-center gap-10 px-6 py-20 md:grid-cols-2 md:py-28">
         <div className="text-center md:text-left">
-          <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
+          <span className="rounded-full bg-(--accent-100) px-3 py-1 text-xs font-semibold uppercase tracking-wide text-(--accent-600)">
             Realtime Messaging
           </span>
           <h1 className="mt-5 text-4xl font-bold tracking-tight md:text-6xl">
@@ -24,7 +24,7 @@ export default function Home() {
             Fast one-to-one and group messaging with live delivery status, read receipts, and typing indicators.
           </p>
           <div className="mt-6 flex w-full max-w-sm flex-col gap-3 sm:max-w-none sm:flex-row sm:gap-4 md:justify-start">
-            <AuthOrChatLink className="rounded-full bg-emerald-600 px-6 py-3 text-white shadow-sm transition hover:bg-emerald-700">
+            <AuthOrChatLink className="rounded-full bg-(--accent-500) px-6 py-3 text-white shadow-sm transition hover:bg-(--accent-600)">
               Start chatting
             </AuthOrChatLink>
             <AuthOrChatLink className="rounded-full border border-zinc-300 bg-white px-6 py-3 transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800">
