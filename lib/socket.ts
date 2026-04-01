@@ -21,6 +21,14 @@ function sendDestination(): string {
   );
 }
 
+function deliveredDestination(): string {
+  return process.env.NEXT_PUBLIC_STOMP_DELIVERED_DESTINATION ?? "/app/chat.delivered";
+}
+
+function readDestination(): string {
+  return process.env.NEXT_PUBLIC_STOMP_READ_DESTINATION ?? "/app/chat.read";
+}
+
 function readToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("token");
@@ -38,6 +46,11 @@ export type OutgoingChatMessage = {
   receiverId: string;
   content: string;
   type: "TEXT";
+};
+
+type MessageReceipt = {
+  messageId: string;
+  chatId: string;
 };
 
 export type ChatSocketPayload = {
@@ -267,6 +280,24 @@ export function sendMessage(message: OutgoingChatMessage): boolean {
     headers: { "content-type": "application/json" },
   });
   return true;
+}
+
+function sendReceipt(destination: string, receipt: MessageReceipt): boolean {
+  if (!stompClient?.connected) return false;
+  stompClient.publish({
+    destination,
+    body: JSON.stringify(receipt),
+    headers: { "content-type": "application/json" },
+  });
+  return true;
+}
+
+export function sendDeliveredReceipt(receipt: MessageReceipt): boolean {
+  return sendReceipt(deliveredDestination(), receipt);
+}
+
+export function sendReadReceipt(receipt: MessageReceipt): boolean {
+  return sendReceipt(readDestination(), receipt);
 }
 
 export function disconnectSocket(): void {

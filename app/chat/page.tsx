@@ -7,7 +7,9 @@ import {
   connectSocket,
   disconnectSocket,
   readUserIdFromToken,
+  sendDeliveredReceipt,
   sendMessage,
+  sendReadReceipt,
   type ChatSocketPayload,
   type SocketStatus,
 } from "@/lib/socket";
@@ -315,10 +317,34 @@ export default function ChatPage() {
 
     const onIncoming = (payload: ChatSocketPayload) => {
       const activeId = activeChatIdRef.current;
-      if (!activeId || payload.chatId !== activeId) return;
 
       const selfId = selfUserIdRef.current ?? "";
       const isOwnMessage = Boolean(selfId) && payload.senderId === selfId;
+      const isActiveChat = Boolean(activeId) && payload.chatId === activeId;
+
+      setChats((prev) =>
+        prev.map((c) => {
+          if (c.id !== payload.chatId) return c;
+          const nextUnread =
+            !isOwnMessage && !isActiveChat ? c.unreadCount + 1 : c.unreadCount;
+          return {
+            ...c,
+            lastMessage: payload.deleted ? "Message deleted" : payload.content,
+            lastMessageTime:
+              payload.createdAt ?? payload.updatedAt ?? c.lastMessageTime,
+            unreadCount: nextUnread,
+          };
+        }),
+      );
+
+      if (!isOwnMessage && payload.id) {
+        sendDeliveredReceipt({ messageId: payload.id, chatId: payload.chatId });
+        if (isActiveChat) {
+          sendReadReceipt({ messageId: payload.id, chatId: payload.chatId });
+        }
+      }
+
+      if (!isActiveChat) return;
 
       setMessages((prev) => {
         const serverId = payload.id ?? `ws-${Date.now()}`;
@@ -578,6 +604,9 @@ export default function ChatPage() {
 
   const handleSelectExistingChat = (chat: MyChatSummary) => {
     setError(null);
+    setChats((prev) =>
+      prev.map((c) => (c.id === chat.id ? { ...c, unreadCount: 0 } : c)),
+    );
     setSelectedChat({
       chatId: chat.id,
       userId: chat.group ? "" : chat.otherUser.id,
