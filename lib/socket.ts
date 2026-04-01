@@ -47,7 +47,7 @@ export type SocketStatus =
 
 export type OutgoingChatMessage = {
   chatId: string;
-  receiverId: string;
+  receiverId?: string;
   content: string;
   type: "TEXT";
 };
@@ -59,7 +59,7 @@ type MessageReceipt = {
 
 type TypingEvent = {
   chatId: string;
-  receiverId: string;
+  receiverId?: string;
   typing: boolean;
 };
 

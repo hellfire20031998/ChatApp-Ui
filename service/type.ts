@@ -57,6 +57,9 @@ export type MyChatSummary = {
   deleted: boolean;
   group: boolean;
   groupName: string | null;
+  createdBy?: string | null;
+  adminIds?: string[] | null;
+  canManageGroup?: boolean;
   lastMessage: string | null;
   lastMessageTime: string | null;
   otherUser: ChatOtherUser;

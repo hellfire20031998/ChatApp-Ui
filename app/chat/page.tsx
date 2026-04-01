@@ -15,9 +15,13 @@ import {
   type SocketStatus,
 } from "@/lib/socket";
 import {
+  addGroupMembers,
+  createGroup,
   deleteMessage,
   getChatMessages,
   getChats,
+  leaveGroup,
+  renameGroup,
   searchUsers,
   startChat,
   updateMessage,
@@ -33,6 +37,8 @@ type SelectedChat = {
   userId: string;
   name: string;
   chatId: string;
+  group: boolean;
+  canManageGroup: boolean;
 };
 
 type ChatMessage = {
@@ -168,11 +174,14 @@ function normalizeMyChatSummary(row: unknown): MyChatSummary | null {
   if (!row || typeof row !== "object") return null;
   const r = row as Record<string, unknown>;
   if (r.id == null) return null;
+  const isGroup = Boolean(r.group);
 
   const otherRaw = r.otherUser;
-  if (!otherRaw || typeof otherRaw !== "object") return null;
-  const ou = otherRaw as Record<string, unknown>;
-  if (ou.id == null) return null;
+  const ou =
+    otherRaw && typeof otherRaw === "object"
+      ? (otherRaw as Record<string, unknown>)
+      : null;
+  if (!isGroup && (!ou || ou.id == null)) return null;
 
   const lastMessageRaw = r.lastMessage;
   const lastMessage =
@@ -187,6 +196,7 @@ function normalizeMyChatSummary(row: unknown): MyChatSummary | null {
     groupNameRaw === null || groupNameRaw === undefined
       ? null
       : String(groupNameRaw);
+  const canManageGroup = Boolean(r.canManageGroup);
 
   const lastTimeRaw = r.lastMessageTime;
   const lastMessageTime =
@@ -199,20 +209,25 @@ function normalizeMyChatSummary(row: unknown): MyChatSummary | null {
     createdAt: r.createdAt != null ? String(r.createdAt) : "",
     updatedAt: r.updatedAt != null ? String(r.updatedAt) : "",
     deleted: Boolean(r.deleted),
-    group: Boolean(r.group),
+    group: isGroup,
     groupName,
+    createdBy: r.createdBy != null ? String(r.createdBy) : null,
+    adminIds: Array.isArray(r.adminIds)
+      ? r.adminIds.map((id) => String(id))
+      : null,
+    canManageGroup,
     lastMessage,
     lastMessageTime,
     otherUser: {
-      id: String(ou.id),
-      username: typeof ou.username === "string" ? ou.username : "",
-      name: typeof ou.name === "string" ? ou.name : "",
-      email: typeof ou.email === "string" ? ou.email : "",
-      createdAt: ou.createdAt != null ? String(ou.createdAt) : "",
-      updatedAt: ou.updatedAt != null ? String(ou.updatedAt) : "",
-      deleted: Boolean(ou.deleted),
+      id: ou?.id != null ? String(ou.id) : "",
+      username: ou && typeof ou.username === "string" ? ou.username : "",
+      name: ou && typeof ou.name === "string" ? ou.name : "",
+      email: ou && typeof ou.email === "string" ? ou.email : "",
+      createdAt: ou?.createdAt != null ? String(ou.createdAt) : "",
+      updatedAt: ou?.updatedAt != null ? String(ou.updatedAt) : "",
+      deleted: Boolean(ou?.deleted),
       userRole:
-        ou.userRole === null || ou.userRole === undefined
+        ou?.userRole === null || ou?.userRole === undefined
           ? null
           : String(ou.userRole),
     },
@@ -321,6 +336,11 @@ export default function ChatPage() {
     {},
   );
   const [typingByChat, setTypingByChat] = useState<Record<string, boolean>>({});
+  const [groupModalOpen, setGroupModalOpen] = useState(false);
+  const [groupNameDraft, setGroupNameDraft] = useState("");
+  const [groupMemberIds, setGroupMemberIds] = useState<string[]>([]);
+  const [groupBusy, setGroupBusy] = useState(false);
+  const [groupSettingsBusy, setGroupSettingsBusy] = useState(false);
 
   const activeChatIdRef = useRef<string | null>(null);
   const selfUserIdRef = useRef<string | null>(null);
@@ -368,7 +388,9 @@ export default function ChatPage() {
         }),
       );
 
-      if (isNewIncomingMessage && payload.id) {
+      const canAckDirect =
+        Boolean(selfId) && payload.receiverId != null && payload.receiverId === selfId;
+      if (isNewIncomingMessage && payload.id && canAckDirect) {
         sendDeliveredReceipt({ messageId: payload.id, chatId: payload.chatId });
         if (isActiveChat) {
           sendReadReceipt({ messageId: payload.id, chatId: payload.chatId });
@@ -595,6 +617,70 @@ export default function ChatPage() {
     }
   };
 
+  const toggleGroupMember = (userId: string) => {
+    setGroupMemberIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
+    );
+  };
+
+  const handleCreateGroup = async () => {
+    const name = groupNameDraft.trim();
+    if (!name) {
+      setError("Enter a group name.");
+      return;
+    }
+    if (groupMemberIds.length === 0) {
+      setError("Select at least one member.");
+      return;
+    }
+    setError(null);
+    setGroupBusy(true);
+    try {
+      const res = await createGroup<{ id: string | number; groupName?: string }>(
+        name,
+        groupMemberIds,
+      );
+      const payload = res.data;
+      const chatId = payload?.id != null ? String(payload.id) : "";
+      setSelectedChat({
+        chatId,
+        userId: "",
+        group: true,
+        canManageGroup: true,
+        name:
+          payload &&
+          typeof payload === "object" &&
+          "groupName" in payload &&
+          typeof payload.groupName === "string" &&
+          payload.groupName.trim()
+            ? payload.groupName
+            : name,
+      });
+      setGroupModalOpen(false);
+      setGroupNameDraft("");
+      setGroupMemberIds([]);
+      setUsers([]);
+      setQuery("");
+      void loadChats();
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        const body = err.response?.data;
+        setError(
+          typeof body === "object" &&
+            body !== null &&
+            "message" in body &&
+            typeof (body as { message: unknown }).message === "string"
+            ? (body as { message: string }).message
+            : "Could not create group",
+        );
+      } else {
+        setError("Could not create group");
+      }
+    } finally {
+      setGroupBusy(false);
+    }
+  };
+
   const handleOpenChat = async (user: UserRow) => {
     setError(null);
     setOpenBusy(true);
@@ -613,6 +699,8 @@ export default function ChatPage() {
         userId: user.id,
         name: user.username,
         chatId,
+        group: false,
+        canManageGroup: false,
       });
       void loadChats();
     } catch (err: unknown) {
@@ -644,17 +732,106 @@ export default function ChatPage() {
       chatId: chat.id,
       userId: chat.group ? "" : chat.otherUser.id,
       name: chatPeerDisplayName(chat),
+      group: chat.group,
+      canManageGroup: Boolean(chat.canManageGroup),
     });
+  };
+
+  const handleAddMembersToSelectedGroup = async () => {
+    if (!selectedChat || !selectedChat.group) return;
+    if (groupMemberIds.length === 0) {
+      setError("Select at least one user to add.");
+      return;
+    }
+    setGroupSettingsBusy(true);
+    setError(null);
+    try {
+      await addGroupMembers(selectedChat.chatId, groupMemberIds);
+      setGroupMemberIds([]);
+      setUsers([]);
+      setQuery("");
+      void loadChats();
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        const body = err.response?.data;
+        setError(
+          typeof body === "object" &&
+            body !== null &&
+            "message" in body &&
+            typeof (body as { message: unknown }).message === "string"
+            ? (body as { message: string }).message
+            : "Could not add members",
+        );
+      } else {
+        setError("Could not add members");
+      }
+    } finally {
+      setGroupSettingsBusy(false);
+    }
+  };
+
+  const handleRenameSelectedGroup = async () => {
+    if (!selectedChat || !selectedChat.group) return;
+    const next = window.prompt("Enter new group name", selectedChat.name)?.trim();
+    if (!next) return;
+    setGroupSettingsBusy(true);
+    setError(null);
+    try {
+      await renameGroup(selectedChat.chatId, next);
+      setSelectedChat((prev) => (prev ? { ...prev, name: next } : prev));
+      void loadChats();
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        const body = err.response?.data;
+        setError(
+          typeof body === "object" &&
+            body !== null &&
+            "message" in body &&
+            typeof (body as { message: unknown }).message === "string"
+            ? (body as { message: string }).message
+            : "Could not rename group",
+        );
+      } else {
+        setError("Could not rename group");
+      }
+    } finally {
+      setGroupSettingsBusy(false);
+    }
+  };
+
+  const handleLeaveSelectedGroup = async () => {
+    if (!selectedChat || !selectedChat.group) return;
+    if (!window.confirm(`Leave "${selectedChat.name}"?`)) return;
+    setGroupSettingsBusy(true);
+    setError(null);
+    try {
+      await leaveGroup(selectedChat.chatId);
+      setSelectedChat(null);
+      setMessages([]);
+      void loadChats();
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        const body = err.response?.data;
+        setError(
+          typeof body === "object" &&
+            body !== null &&
+            "message" in body &&
+            typeof (body as { message: unknown }).message === "string"
+            ? (body as { message: string }).message
+            : "Could not leave group",
+        );
+      } else {
+        setError("Could not leave group");
+      }
+    } finally {
+      setGroupSettingsBusy(false);
+    }
   };
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     const text = draft.trim();
     if (!text || !selectedChat) return;
-    if (!selectedChat.userId) {
-      setError("Messaging in groups is not set up yet — open a direct chat.");
-      return;
-    }
     setError(null);
 
     const tempId = `pending-${Date.now()}`;
@@ -673,7 +850,7 @@ export default function ChatPage() {
     if (typingActiveRef.current) {
       sendTypingEvent({
         chatId: selectedChat.chatId,
-        receiverId: selectedChat.userId,
+        receiverId: selectedChat.userId || undefined,
         typing: false,
       });
       typingActiveRef.current = false;
@@ -686,7 +863,7 @@ export default function ChatPage() {
 
     const sent = sendMessage({
       chatId: selectedChat.chatId,
-      receiverId: selectedChat.userId,
+      receiverId: selectedChat.userId || undefined,
       content: text,
       type: "TEXT",
     });
@@ -698,10 +875,10 @@ export default function ChatPage() {
   };
 
   const closeChatMobile = () => {
-    if (typingActiveRef.current && selectedChat?.chatId && selectedChat.userId) {
+    if (typingActiveRef.current && selectedChat?.chatId) {
       sendTypingEvent({
         chatId: selectedChat.chatId,
-        receiverId: selectedChat.userId,
+        receiverId: selectedChat.userId || undefined,
         typing: false,
       });
       typingActiveRef.current = false;
@@ -715,12 +892,12 @@ export default function ChatPage() {
 
   const handleDraftChange = (value: string) => {
     setDraft(value);
-    if (!selectedChat?.chatId || !selectedChat.userId || socketStatus !== "connected") return;
+    if (!selectedChat?.chatId || socketStatus !== "connected") return;
     const text = value.trim();
     if (text.length > 0 && !typingActiveRef.current) {
       sendTypingEvent({
         chatId: selectedChat.chatId,
-        receiverId: selectedChat.userId,
+        receiverId: selectedChat.userId || undefined,
         typing: true,
       });
       typingActiveRef.current = true;
@@ -730,7 +907,7 @@ export default function ChatPage() {
       if (!typingActiveRef.current) return;
       sendTypingEvent({
         chatId: selectedChat.chatId,
-        receiverId: selectedChat.userId,
+        receiverId: selectedChat.userId || undefined,
         typing: false,
       });
       typingActiveRef.current = false;
@@ -738,7 +915,7 @@ export default function ChatPage() {
     if (text.length === 0 && typingActiveRef.current) {
       sendTypingEvent({
         chatId: selectedChat.chatId,
-        receiverId: selectedChat.userId,
+        receiverId: selectedChat.userId || undefined,
         typing: false,
       });
       typingActiveRef.current = false;
@@ -883,7 +1060,7 @@ export default function ChatPage() {
   useEffect(() => {
     if (socketStatus !== "connected") return;
     const chatId = selectedChat?.chatId;
-    if (!chatId) return;
+    if (!chatId || !selectedChat?.userId) return;
     const toMarkRead = messages.filter(
       (m) =>
         m.chatId === chatId &&
@@ -904,6 +1081,7 @@ export default function ChatPage() {
   const sidebarHiddenOnMobile = selectedChat !== null;
 
   return (
+    <>
     <div className="flex h-dvh w-full overflow-hidden bg-[#f0f2f5] text-[#111b21] antialiased">
       {/* —— Sidebar (chat list) —— */}
       <aside
@@ -933,6 +1111,13 @@ export default function ChatPage() {
               className="shrink-0 rounded-lg bg-[#008069] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#006d5b] disabled:opacity-50"
             >
               {searchBusy ? "…" : "Search"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setGroupModalOpen(true)}
+              className="shrink-0 rounded-lg border border-[#008069] bg-white px-3 py-2 text-sm font-medium text-[#008069] transition hover:bg-[#e6f4f2]"
+            >
+              New group
             </button>
           </form>
         </div>
@@ -1018,7 +1203,13 @@ export default function ChatPage() {
                           <button
                             type="button"
                             disabled={openBusy}
-                            onClick={() => handleOpenChat(user)}
+                            onClick={() => {
+                              if (selectedChat?.group) {
+                                toggleGroupMember(user.id);
+                              } else {
+                                void handleOpenChat(user);
+                              }
+                            }}
                             className={`flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-[#f5f6f6] disabled:opacity-60 ${active ? "bg-[#f0f2f5]" : ""}`}
                           >
                             <Avatar label={user.username} />
@@ -1027,9 +1218,20 @@ export default function ChatPage() {
                                 {user.username}
                               </p>
                               <p className="truncate text-sm text-[#667781]">
-                                Tap to start or open chat
+                                {selectedChat?.group
+                                  ? groupMemberIds.includes(user.id)
+                                    ? "Selected for adding"
+                                    : "Tap to select member"
+                                  : "Tap to start or open chat"}
                               </p>
                             </div>
+                            {selectedChat?.group ? (
+                              <input
+                                type="checkbox"
+                                checked={groupMemberIds.includes(user.id)}
+                                onChange={() => toggleGroupMember(user.id)}
+                              />
+                            ) : null}
                           </button>
                         </li>
                       );
@@ -1085,6 +1287,38 @@ export default function ChatPage() {
                           : "Offline"}
                 </p>
               </div>
+              {selectedChat.group ? (
+                <div className="flex items-center gap-2">
+                  {selectedChat.canManageGroup ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void handleAddMembersToSelectedGroup()}
+                        disabled={groupSettingsBusy || groupMemberIds.length === 0}
+                        className="rounded-md border border-white/30 px-2 py-1 text-xs text-white disabled:opacity-50"
+                      >
+                        Add members
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleRenameSelectedGroup()}
+                        disabled={groupSettingsBusy}
+                        className="rounded-md border border-white/30 px-2 py-1 text-xs text-white disabled:opacity-50"
+                      >
+                        Rename
+                      </button>
+                    </>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void handleLeaveSelectedGroup()}
+                    disabled={groupSettingsBusy}
+                    className="rounded-md border border-red-300/60 px-2 py-1 text-xs text-red-100 disabled:opacity-50"
+                  >
+                    Leave
+                  </button>
+                </div>
+              ) : null}
               <div className="hidden items-center gap-1 sm:flex">
                 <span className="rounded-full p-2 opacity-90 hover:bg-white/10">
                   <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
@@ -1251,7 +1485,6 @@ export default function ChatPage() {
                   className="mb-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#008069] text-white shadow-md transition hover:bg-[#006d5b] disabled:opacity-40"
                   disabled={
                     !draft.trim() ||
-                    !selectedChat.userId ||
                     socketStatus !== "connected"
                   }
                   aria-label="Send"
@@ -1284,5 +1517,67 @@ export default function ChatPage() {
         )}
       </section>
     </div>
+    {groupModalOpen ? (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+        <div className="w-full max-w-md rounded-xl bg-white p-4 shadow-xl">
+          <h2 className="text-lg font-semibold text-[#111b21]">Create group</h2>
+          <p className="mt-1 text-xs text-[#667781]">
+            Search users, select members, and create a group chat.
+          </p>
+          <input
+            value={groupNameDraft}
+            onChange={(e) => setGroupNameDraft(e.target.value)}
+            placeholder="Group name"
+            className="mt-3 w-full rounded-md border border-[#d1d7db] px-3 py-2 text-sm outline-none"
+          />
+          <div className="mt-3 max-h-56 overflow-y-auto rounded-md border border-[#d1d7db]">
+            {users.length === 0 ? (
+              <p className="p-3 text-sm text-[#667781]">Search users first to add members.</p>
+            ) : (
+              <ul>
+                {users.map((u) => {
+                  const checked = groupMemberIds.includes(u.id);
+                  return (
+                    <li key={u.id}>
+                      <label className="flex cursor-pointer items-center gap-3 border-b border-[#f0f2f5] px-3 py-2 last:border-b-0">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleGroupMember(u.id)}
+                        />
+                        <span className="text-sm text-[#111b21]">{u.username}</span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (groupBusy) return;
+                setGroupModalOpen(false);
+                setGroupNameDraft("");
+                setGroupMemberIds([]);
+              }}
+              className="rounded-md border border-[#d1d7db] px-3 py-2 text-sm text-[#111b21]"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleCreateGroup()}
+              disabled={groupBusy}
+              className="rounded-md bg-[#008069] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+            >
+              {groupBusy ? "Creating..." : "Create"}
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
+    </>
   );
 }

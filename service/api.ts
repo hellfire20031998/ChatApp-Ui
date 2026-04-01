@@ -29,6 +29,42 @@ export const startChat = async <T = unknown>(
   return res.data;
 };
 
+export const createGroup = async <T = unknown>(
+  groupName: string,
+  participantIds: string[],
+): Promise<ApiResponse<T>> => {
+  const res = await axiosInstance.post<ApiResponse<T>>(`/chats/group`, {
+    groupName,
+    participantIds,
+  });
+  return res.data;
+};
+
+export const renameGroup = async <T = unknown>(
+  chatId: string,
+  groupName: string,
+): Promise<ApiResponse<T>> => {
+  const res = await axiosInstance.patch<ApiResponse<T>>(`/chats/${chatId}/group`, {
+    groupName,
+  });
+  return res.data;
+};
+
+export const addGroupMembers = async <T = unknown>(
+  chatId: string,
+  participantIds: string[],
+): Promise<ApiResponse<T>> => {
+  const res = await axiosInstance.post<ApiResponse<T>>(`/chats/${chatId}/participants`, {
+    participantIds,
+  });
+  return res.data;
+};
+
+export const leaveGroup = async (chatId: string): Promise<ApiResponse<string>> => {
+  const res = await axiosInstance.post<ApiResponse<string>>(`/chats/${chatId}/leave`);
+  return res.data;
+};
+
 export const login = async (
   payload: LoginRequest,
 ): Promise<ApiResponse<AuthSessionPayload>> => {
