@@ -74,7 +74,26 @@ export default function AuthPage() {
 
   return (
     <div className="flex min-h-full flex-1 items-center justify-center bg-linear-to-b from-emerald-50 to-zinc-100 px-4 py-12 dark:from-zinc-950 dark:to-black">
-      <div className="w-full max-w-md rounded-3xl border border-zinc-200 bg-white p-8 shadow-lg shadow-zinc-200/60 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
+      <div className="grid w-full max-w-5xl overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-lg shadow-zinc-200/60 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none md:grid-cols-2">
+        <div className="hidden flex-col justify-between bg-[#008069] p-8 text-white md:flex">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/80">
+              ChatApp
+            </p>
+            <h2 className="mt-3 text-3xl font-semibold leading-tight">
+              Conversations that stay in flow.
+            </h2>
+            <p className="mt-3 text-sm text-white/85">
+              Realtime messaging, group management, and read receipts in one clean workspace.
+            </p>
+          </div>
+          <div className="space-y-2 text-sm text-white/85">
+            <p>- Live message delivery and typing indicators</p>
+            <p>- Direct and group conversations</p>
+            <p>- Secure JWT-based authentication</p>
+          </div>
+        </div>
+        <div className="p-8">
         <p className="text-center text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
           Welcome to ChatApp
         </p>
@@ -187,6 +206,7 @@ export default function AuthPage() {
             Back to home
           </Link>
         </p>
+      </div>
       </div>
     </div>
   );

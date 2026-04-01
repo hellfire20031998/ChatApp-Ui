@@ -132,16 +132,16 @@ function MessageStatusTick({ status }: { status?: string }) {
   if (!status) return null;
   const normalized = status.toUpperCase();
   if (normalized === "SENT") {
-    return <span className="ml-1 text-[11px] text-[#667781]">✓</span>;
+    return <span className="ml-1 text-[11px] text-zinc-500">✓</span>;
   }
   if (normalized === "DELIVERED") {
-    return <span className="ml-1 text-[11px] text-[#667781]">✓✓</span>;
+    return <span className="ml-1 text-[11px] text-zinc-500">✓✓</span>;
   }
   if (normalized === "READ") {
     return <span className="ml-1 text-[11px] text-[#34b7f1]">✓✓</span>;
   }
   return (
-    <span className="ml-1 text-[11px] text-[#667781]">
+    <span className="ml-1 text-[11px] text-zinc-500">
       {normalized.toLowerCase()}
     </span>
   );
@@ -163,7 +163,7 @@ function Avatar({
         : "h-10 w-10 text-base";
   return (
     <span
-      className={`flex shrink-0 items-center justify-center rounded-full bg-[#dfe5e7] font-medium text-[#54656f] ${sizeClass}`}
+      className={`flex shrink-0 items-center justify-center rounded-full bg-emerald-100 font-medium text-emerald-800 ${sizeClass}`}
     >
       {initial}
     </span>
@@ -341,6 +341,8 @@ export default function ChatPage() {
   const [groupMemberIds, setGroupMemberIds] = useState<string[]>([]);
   const [groupBusy, setGroupBusy] = useState(false);
   const [groupSettingsBusy, setGroupSettingsBusy] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<"chats" | "users">("chats");
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
 
   const activeChatIdRef = useRef<string | null>(null);
   const selfUserIdRef = useRef<string | null>(null);
@@ -352,6 +354,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     activeChatIdRef.current = selectedChat?.chatId ?? null;
+    setGroupMenuOpen(false);
   }, [selectedChat?.chatId]);
 
   useEffect(() => {
@@ -598,6 +601,7 @@ export default function ChatPage() {
     try {
       const res = await searchUsers<UserRow[]>(query);
       setUsers(Array.isArray(res.data) ? res.data : []);
+      setSidebarTab("users");
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
         const body = err.response?.data;
@@ -702,6 +706,7 @@ export default function ChatPage() {
         group: false,
         canManageGroup: false,
       });
+      setSidebarTab("chats");
       void loadChats();
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
@@ -735,6 +740,7 @@ export default function ChatPage() {
       group: chat.group,
       canManageGroup: Boolean(chat.canManageGroup),
     });
+    setSidebarTab("chats");
   };
 
   const handleAddMembersToSelectedGroup = async () => {
@@ -1082,44 +1088,68 @@ export default function ChatPage() {
 
   return (
     <>
-    <div className="flex h-dvh w-full overflow-hidden bg-[#f0f2f5] text-[#111b21] antialiased">
+    <div className="flex h-dvh w-full overflow-hidden bg-linear-to-b from-emerald-50 to-zinc-100 text-zinc-900 antialiased dark:from-zinc-950 dark:to-black dark:text-zinc-50">
       {/* —— Sidebar (chat list) —— */}
       <aside
-        className={`flex min-h-0 w-full min-w-0 flex-col border-[#d1d7db] md:w-[400px] md:max-w-[40vw] md:border-r ${sidebarHiddenOnMobile ? "hidden md:flex" : "flex"}`}
+        className={`flex min-h-0 w-full min-w-0 flex-col border-zinc-200/80 bg-white/80 backdrop-blur md:w-[400px] md:max-w-[40vw] md:border-r dark:border-zinc-800 dark:bg-zinc-900/80 ${sidebarHiddenOnMobile ? "hidden md:flex" : "flex"}`}
       >
-        <header className="flex h-[60px] shrink-0 items-center justify-between gap-3 bg-[#008069] px-4 text-white">
+        <header className="flex h-[60px] shrink-0 items-center justify-between gap-3 border-b border-zinc-200/80 bg-white/90 px-4 text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
           <h1 className="text-xl font-medium tracking-tight">Chats</h1>
-          <LogoutButton className="shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-white/95 transition hover:bg-white/15">
+          <LogoutButton className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800">
             Log out
           </LogoutButton>
         </header>
 
-        <div className="shrink-0 bg-[#f0f2f5] px-3 py-2">
+        <div className="shrink-0 bg-zinc-50/70 px-3 py-2 dark:bg-zinc-900/40">
           <form onSubmit={handleSearch} className="flex gap-2">
             <div className="flex min-w-0 flex-1 items-center gap-3 rounded-lg bg-white px-3 py-1.5 shadow-sm">
-              <IconSearch className="shrink-0 text-[#54656f]" />
+              <IconSearch className="shrink-0 text-zinc-500" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search or start new chat"
-                className="min-w-0 flex-1 bg-transparent py-1.5 text-[15px] text-[#111b21] placeholder:text-[#667781] outline-none"
+                className="min-w-0 flex-1 bg-transparent py-1.5 text-[15px] text-zinc-900 placeholder:text-zinc-500 outline-none dark:text-zinc-100 dark:placeholder:text-zinc-400"
               />
             </div>
             <button
               type="submit"
               disabled={searchBusy}
-              className="shrink-0 rounded-lg bg-[#008069] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#006d5b] disabled:opacity-50"
+              className="shrink-0 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50"
             >
               {searchBusy ? "…" : "Search"}
             </button>
             <button
               type="button"
               onClick={() => setGroupModalOpen(true)}
-              className="shrink-0 rounded-lg border border-[#008069] bg-white px-3 py-2 text-sm font-medium text-[#008069] transition hover:bg-[#e6f4f2]"
+              className="shrink-0 rounded-lg border border-emerald-600 bg-white px-3 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 dark:bg-zinc-900 dark:text-emerald-300 dark:hover:bg-zinc-800"
             >
               New group
             </button>
           </form>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setSidebarTab("chats")}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                sidebarTab === "chats"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-white text-zinc-600 hover:bg-zinc-100 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              }`}
+            >
+              Chats
+            </button>
+            <button
+              type="button"
+              onClick={() => setSidebarTab("users")}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                sidebarTab === "users"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-white text-zinc-600 hover:bg-zinc-100 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              }`}
+            >
+              Users
+            </button>
+          </div>
         </div>
 
         {error ? (
@@ -1140,15 +1170,15 @@ export default function ChatPage() {
           </p>
         ) : null}
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-white">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-white/80 dark:bg-zinc-900/80">
           {chatsLoading ? (
-            <p className="px-4 py-8 text-center text-sm text-[#667781]">
+            <p className="px-4 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
               Loading your chats…
             </p>
           ) : (
             <>
-              {chats.length > 0 ? (
-                <ul className="divide-y divide-[#f0f2f5]">
+              {sidebarTab === "chats" && chats.length > 0 ? (
+                <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
                   {chats.map((chat) => {
                     const active = selectedChat?.chatId === chat.id;
                     const title = chatPeerDisplayName(chat);
@@ -1160,26 +1190,26 @@ export default function ChatPage() {
                         <button
                           type="button"
                           onClick={() => handleSelectExistingChat(chat)}
-                          className={`flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-[#f5f6f6] ${active ? "bg-[#f0f2f5]" : ""}`}
+                          className={`flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-zinc-100/80 dark:hover:bg-zinc-800 ${active ? "bg-emerald-50 dark:bg-zinc-800" : ""}`}
                         >
                           <Avatar label={title} />
-                          <div className="min-w-0 flex-1 border-b border-[#f0f2f5] py-0.5">
+                          <div className="min-w-0 flex-1 border-b border-zinc-100 py-0.5 dark:border-zinc-800">
                             <div className="flex items-baseline justify-between gap-2">
-                              <p className="truncate font-medium text-[#111b21]">
+                              <p className="truncate font-medium text-zinc-900 dark:text-zinc-100">
                                 {title}
                               </p>
                               {chat.lastMessageTime ? (
-                                <span className="shrink-0 text-[11px] text-[#667781]">
+                                <span className="shrink-0 text-[11px] text-zinc-500 dark:text-zinc-400">
                                   {formatListTime(chat.lastMessageTime)}
                                 </span>
                               ) : null}
                             </div>
-                            <p className="truncate text-sm text-[#667781]">
+                            <p className="truncate text-sm text-zinc-500 dark:text-zinc-400">
                               {preview}
                             </p>
                           </div>
                           {chat.unreadCount > 0 ? (
-                            <span className="shrink-0 self-center rounded-full bg-[#008069] px-2 py-0.5 text-xs font-medium text-white">
+                            <span className="shrink-0 self-center rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-medium text-white">
                               {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
                             </span>
                           ) : null}
@@ -1190,12 +1220,12 @@ export default function ChatPage() {
                 </ul>
               ) : null}
 
-              {users.length > 0 ? (
+              {sidebarTab === "users" && users.length > 0 ? (
                 <>
-                  <div className="sticky top-0 z-10 bg-[#f0f2f5] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[#667781]">
+                  <div className="sticky top-0 z-10 bg-zinc-50/90 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 backdrop-blur dark:bg-zinc-900/90 dark:text-zinc-400">
                     Search results
                   </div>
-                  <ul className="divide-y divide-[#f0f2f5]">
+                  <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
                     {users.map((user) => {
                       const active = selectedChat?.userId === user.id;
                       return (
@@ -1210,14 +1240,14 @@ export default function ChatPage() {
                                 void handleOpenChat(user);
                               }
                             }}
-                            className={`flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-[#f5f6f6] disabled:opacity-60 ${active ? "bg-[#f0f2f5]" : ""}`}
+                            className={`flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-zinc-100/80 disabled:opacity-60 dark:hover:bg-zinc-800 ${active ? "bg-emerald-50 dark:bg-zinc-800" : ""}`}
                           >
                             <Avatar label={user.username} />
-                            <div className="min-w-0 flex-1 border-b border-[#f0f2f5] pb-3">
-                              <p className="truncate font-medium text-[#111b21]">
+                            <div className="min-w-0 flex-1 border-b border-zinc-100 pb-3 dark:border-zinc-800">
+                              <p className="truncate font-medium text-zinc-900 dark:text-zinc-100">
                                 {user.username}
                               </p>
-                              <p className="truncate text-sm text-[#667781]">
+                              <p className="truncate text-sm text-zinc-500 dark:text-zinc-400">
                                 {selectedChat?.group
                                   ? groupMemberIds.includes(user.id)
                                     ? "Selected for adding"
@@ -1241,11 +1271,13 @@ export default function ChatPage() {
               ) : null}
 
               {!chatsLoading &&
-              chats.length === 0 &&
-              users.length === 0 &&
+              ((sidebarTab === "chats" && chats.length === 0) ||
+                (sidebarTab === "users" && users.length === 0)) &&
               !chatsError ? (
-                <p className="px-4 py-8 text-center text-sm text-[#667781]">
-                  No conversations yet. Search above to find people.
+                <p className="px-4 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                  {sidebarTab === "chats"
+                    ? "No conversations yet. Search above to find people."
+                    : "No users found. Try another search."}
                 </p>
               ) : null}
             </>
@@ -1255,11 +1287,11 @@ export default function ChatPage() {
 
       {/* —— Conversation —— */}
       <section
-        className={`min-h-0 min-w-0 flex-1 flex-col bg-[#e5ddd5] ${selectedChat ? "flex" : "hidden md:flex"}`}
+        className={`min-h-0 min-w-0 flex-1 flex-col bg-zinc-50/70 dark:bg-zinc-950 ${selectedChat ? "flex" : "hidden md:flex"}`}
       >
         {selectedChat ? (
           <>
-            <header className="flex h-[60px] shrink-0 items-center gap-2 bg-[#008069] px-2 text-white md:px-4">
+            <header className="flex h-[60px] shrink-0 items-center gap-2 border-b border-zinc-200/80 bg-white/90 px-2 text-zinc-900 md:px-4 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
               <button
                 type="button"
                 onClick={closeChatMobile}
@@ -1273,7 +1305,7 @@ export default function ChatPage() {
                 <p className="truncate text-[17px] font-medium leading-tight">
                   {selectedChat.name}
                 </p>
-                <p className="truncate text-xs text-white/85">
+                <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
                   {typingByChat[selectedChat.chatId]
                     ? `${selectedChat.name} is typing...`
                     : socketStatus === "connected"
@@ -1288,35 +1320,56 @@ export default function ChatPage() {
                 </p>
               </div>
               {selectedChat.group ? (
-                <div className="flex items-center gap-2">
-                  {selectedChat.canManageGroup ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => void handleAddMembersToSelectedGroup()}
-                        disabled={groupSettingsBusy || groupMemberIds.length === 0}
-                        className="rounded-md border border-white/30 px-2 py-1 text-xs text-white disabled:opacity-50"
-                      >
-                        Add members
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleRenameSelectedGroup()}
-                        disabled={groupSettingsBusy}
-                        className="rounded-md border border-white/30 px-2 py-1 text-xs text-white disabled:opacity-50"
-                      >
-                        Rename
-                      </button>
-                    </>
-                  ) : null}
+                <div className="relative">
                   <button
                     type="button"
-                    onClick={() => void handleLeaveSelectedGroup()}
-                    disabled={groupSettingsBusy}
-                    className="rounded-md border border-red-300/60 px-2 py-1 text-xs text-red-100 disabled:opacity-50"
+                    onClick={() => setGroupMenuOpen((v) => !v)}
+                    className="rounded-full px-2 py-1 text-xl leading-none hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    aria-label="Group actions"
                   >
-                    Leave
+                    ⋯
                   </button>
+                  {groupMenuOpen ? (
+                    <div className="absolute right-0 top-9 z-20 w-40 rounded-md border border-zinc-200 bg-white py-1 text-sm text-zinc-900 shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+                      {selectedChat.canManageGroup ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void handleAddMembersToSelectedGroup();
+                              setGroupMenuOpen(false);
+                            }}
+                            disabled={groupSettingsBusy || groupMemberIds.length === 0}
+                            className="block w-full px-3 py-2 text-left hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"
+                          >
+                            Add members
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void handleRenameSelectedGroup();
+                              setGroupMenuOpen(false);
+                            }}
+                            disabled={groupSettingsBusy}
+                            className="block w-full px-3 py-2 text-left hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"
+                          >
+                            Rename group
+                          </button>
+                        </>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleLeaveSelectedGroup();
+                          setGroupMenuOpen(false);
+                        }}
+                        disabled={groupSettingsBusy}
+                        className="block w-full px-3 py-2 text-left text-red-600 hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"
+                      >
+                        Leave group
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
               <div className="hidden items-center gap-1 sm:flex">
@@ -1338,20 +1391,20 @@ export default function ChatPage() {
               onScroll={handleMessagesScroll}
               className="relative min-h-0 flex-1 overflow-y-auto"
               style={{
-                backgroundColor: "#e5ddd5",
+                backgroundColor: "#f8fafc",
                 backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c8c4bc' fill-opacity='0.22'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
               }}
             >
               <div className="flex min-h-full flex-col justify-end px-4 py-3 pb-2">
                 {loadingOlder ? (
-                  <p className="pb-2 text-center text-xs text-[#667781]">
+                  <p className="pb-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
                     Loading older messages...
                   </p>
                 ) : null}
                 {messages.length === 0 ? (
                   <div className="flex flex-1 flex-col items-center justify-center px-6 py-12">
-                    <div className="max-w-sm rounded-lg border border-[#d1d7db] bg-[#ffecb3]/90 px-4 py-3 text-center text-sm text-[#54656f] shadow-sm">
-                      <span className="font-medium text-[#111b21]">
+                    <div className="max-w-sm rounded-lg border border-zinc-200 bg-white/90 px-4 py-3 text-center text-sm text-zinc-600 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                      <span className="font-medium text-zinc-900 dark:text-zinc-100">
                         {messagesLoading ? "Loading messages..." : "No messages yet"}
                       </span>
                       <p className="mt-1 text-[13px] leading-snug">
@@ -1371,12 +1424,12 @@ export default function ChatPage() {
                         <div
                           className={`max-w-[85%] sm:max-w-[75%] rounded-lg px-3 py-2 text-[14.2px] leading-snug shadow-sm ${
                             m.outbound
-                              ? "rounded-br-none bg-[#d9fdd3] text-[#111b21]"
-                              : "rounded-bl-none bg-white text-[#111b21]"
-                          } ${m.pending ? "opacity-75 ring-1 ring-[#008069]/25" : ""}`}
+                              ? "rounded-br-none bg-emerald-100 text-zinc-900 dark:bg-emerald-900/40 dark:text-zinc-100"
+                              : "rounded-bl-none bg-white text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100"
+                          } ${m.pending ? "opacity-75 ring-1 ring-emerald-500/25" : ""}`}
                         >
                           {!m.outbound && m.senderUsername ? (
-                            <p className="mb-1 text-xs font-medium text-[#008069]">
+                            <p className="mb-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
                               {m.senderUsername}
                             </p>
                           ) : null}
@@ -1392,7 +1445,7 @@ export default function ChatPage() {
                                 type="button"
                                 onClick={() => void saveEditMessage(m.id)}
                                 disabled={Boolean(messageBusyIds[m.id]) || !editDraft.trim()}
-                                className="rounded bg-[#008069] px-2 py-1 text-xs text-white disabled:opacity-50"
+                                className="rounded bg-emerald-600 px-2 py-1 text-xs text-white disabled:opacity-50"
                               >
                                 Save
                               </button>
@@ -1420,7 +1473,7 @@ export default function ChatPage() {
                                 type="button"
                                 onClick={() => startEditMessage(m)}
                                 disabled={Boolean(messageBusyIds[m.id])}
-                                className="text-[11px] font-medium text-[#0b5b50] hover:underline disabled:opacity-50"
+                                className="text-[11px] font-medium text-emerald-700 hover:underline disabled:opacity-50 dark:text-emerald-300"
                               >
                                 Edit
                               </button>
@@ -1434,7 +1487,7 @@ export default function ChatPage() {
                               </button>
                             </div>
                           ) : null}
-                          <p className="mt-0.5 flex items-center justify-end text-[11px] text-[#667781]">
+                          <p className="mt-0.5 flex items-center justify-end text-[11px] text-zinc-500 dark:text-zinc-400">
                             <span>{formatMessageTime(m.createdAt)}</span>
                             {m.pending ? (
                               <span className="ml-1">sending</span>
@@ -1453,21 +1506,21 @@ export default function ChatPage() {
               </div>
             </div>
 
-            <footer className="shrink-0 bg-[#f0f2f5] px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:px-4">
+            <footer className="shrink-0 border-t border-zinc-200/80 bg-white/90 px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:px-4 dark:border-zinc-800 dark:bg-zinc-900">
               <form
                 onSubmit={handleSend}
                 className="flex items-end gap-2"
               >
                 <button
                   type="button"
-                  className="mb-1 shrink-0 rounded-full p-2 text-[#54656f] hover:bg-[#e9edef]"
+                  className="mb-1 shrink-0 rounded-full p-2 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
                   aria-label="Attach"
                 >
                   <IconAttach />
                 </button>
                 <button
                   type="button"
-                  className="mb-1 shrink-0 rounded-full p-2 text-[#54656f] hover:bg-[#e9edef]"
+                  className="mb-1 shrink-0 rounded-full p-2 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
                   aria-label="Emoji"
                 >
                   <IconEmoji />
@@ -1477,12 +1530,12 @@ export default function ChatPage() {
                     value={draft}
                     onChange={(e) => handleDraftChange(e.target.value)}
                     placeholder="Type a message"
-                    className="min-h-[36px] w-full bg-transparent py-2 text-[15px] text-[#111b21] placeholder:text-[#667781] outline-none"
+                    className="min-h-[36px] w-full bg-transparent py-2 text-[15px] text-zinc-900 placeholder:text-zinc-500 outline-none dark:text-zinc-100 dark:placeholder:text-zinc-400"
                   />
                 </div>
                 <button
                   type="submit"
-                  className="mb-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#008069] text-white shadow-md transition hover:bg-[#006d5b] disabled:opacity-40"
+                  className="mb-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-md transition hover:bg-emerald-700 disabled:opacity-40"
                   disabled={
                     !draft.trim() ||
                     socketStatus !== "connected"
@@ -1495,57 +1548,57 @@ export default function ChatPage() {
             </footer>
           </>
         ) : (
-          <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center bg-[#f8f9fa] px-8 text-center">
-            <div className="rounded-full border-2 border-dashed border-[#00a884]/35 p-10">
+          <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center bg-zinc-50 px-8 text-center dark:bg-zinc-950">
+            <div className="rounded-full border-2 border-dashed border-emerald-300/70 p-10 dark:border-emerald-700/50">
               <svg
                 viewBox="0 0 24 24"
-                className="mx-auto h-24 w-24 text-[#00a884]"
+                className="mx-auto h-24 w-24 text-emerald-600 dark:text-emerald-400"
                 fill="currentColor"
                 aria-hidden
               >
                 <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
               </svg>
             </div>
-            <h2 className="mt-8 text-[32px] font-light text-[#41525d]">
+            <h2 className="mt-8 text-[32px] font-light text-zinc-700 dark:text-zinc-200">
               ChatApp Web
             </h2>
-            <p className="mt-3 max-w-sm text-sm leading-relaxed text-[#667781]">
+            <p className="mt-3 max-w-sm text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
               Search for a contact on the left, then pick a chat. Send messages
-              are shown on your side in green bubbles—like WhatsApp.
+              are shown with the same ChatApp look and feel across pages.
             </p>
           </div>
         )}
       </section>
     </div>
     {groupModalOpen ? (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-        <div className="w-full max-w-md rounded-xl bg-white p-4 shadow-xl">
-          <h2 className="text-lg font-semibold text-[#111b21]">Create group</h2>
-          <p className="mt-1 text-xs text-[#667781]">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+        <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Create group</h2>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
             Search users, select members, and create a group chat.
           </p>
           <input
             value={groupNameDraft}
             onChange={(e) => setGroupNameDraft(e.target.value)}
             placeholder="Group name"
-            className="mt-3 w-full rounded-md border border-[#d1d7db] px-3 py-2 text-sm outline-none"
+            className="mt-3 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           />
-          <div className="mt-3 max-h-56 overflow-y-auto rounded-md border border-[#d1d7db]">
+          <div className="mt-3 max-h-56 overflow-y-auto rounded-md border border-zinc-200 dark:border-zinc-700">
             {users.length === 0 ? (
-              <p className="p-3 text-sm text-[#667781]">Search users first to add members.</p>
+              <p className="p-3 text-sm text-zinc-500 dark:text-zinc-400">Search users first to add members.</p>
             ) : (
               <ul>
                 {users.map((u) => {
                   const checked = groupMemberIds.includes(u.id);
                   return (
                     <li key={u.id}>
-                      <label className="flex cursor-pointer items-center gap-3 border-b border-[#f0f2f5] px-3 py-2 last:border-b-0">
+                      <label className="flex cursor-pointer items-center gap-3 border-b border-zinc-100 px-3 py-2 last:border-b-0 dark:border-zinc-800">
                         <input
                           type="checkbox"
                           checked={checked}
                           onChange={() => toggleGroupMember(u.id)}
                         />
-                        <span className="text-sm text-[#111b21]">{u.username}</span>
+                        <span className="text-sm text-zinc-900 dark:text-zinc-100">{u.username}</span>
                       </label>
                     </li>
                   );
@@ -1562,7 +1615,7 @@ export default function ChatPage() {
                 setGroupNameDraft("");
                 setGroupMemberIds([]);
               }}
-              className="rounded-md border border-[#d1d7db] px-3 py-2 text-sm text-[#111b21]"
+              className="rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:text-zinc-100"
             >
               Cancel
             </button>
@@ -1570,7 +1623,7 @@ export default function ChatPage() {
               type="button"
               onClick={() => void handleCreateGroup()}
               disabled={groupBusy}
-              className="rounded-md bg-[#008069] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+              className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
               {groupBusy ? "Creating..." : "Create"}
             </button>

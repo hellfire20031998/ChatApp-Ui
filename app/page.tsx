@@ -12,26 +12,44 @@ export default function Home() {
       </nav>
 
       {/* Hero Section */}
-      <section className="mx-auto flex max-w-5xl flex-col items-center justify-center px-6 py-20 text-center md:py-28">
-        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
-          Realtime Messaging
-        </span>
-        <h1 className="mt-5 text-4xl font-bold tracking-tight md:text-6xl">
-          Real-time chat that feels instant.
-        </h1>
-
-        <p className="mt-4 max-w-2xl text-lg text-zinc-600 dark:text-zinc-400">
-          Fast one-to-one messaging with live delivery status, read receipts, and a clean chat UI powered by WebSockets.
-        </p>
-
-        <div className="mt-6 flex w-full max-w-sm flex-col gap-3 sm:max-w-none sm:flex-row sm:justify-center sm:gap-4">
-          <AuthOrChatLink className="rounded-full bg-emerald-600 px-6 py-3 text-white shadow-sm transition hover:bg-emerald-700">
-            Get Started
-          </AuthOrChatLink>
-
-          <AuthOrChatLink className="rounded-full border border-zinc-300 bg-white px-6 py-3 transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800">
-            Sign in
-          </AuthOrChatLink>
+      <section className="mx-auto grid max-w-6xl items-center gap-10 px-6 py-20 md:grid-cols-2 md:py-28">
+        <div className="text-center md:text-left">
+          <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
+            Realtime Messaging
+          </span>
+          <h1 className="mt-5 text-4xl font-bold tracking-tight md:text-6xl">
+            Real-time chat that feels instant.
+          </h1>
+          <p className="mt-4 max-w-2xl text-lg text-zinc-600 dark:text-zinc-400">
+            Fast one-to-one and group messaging with live delivery status, read receipts, and typing indicators.
+          </p>
+          <div className="mt-6 flex w-full max-w-sm flex-col gap-3 sm:max-w-none sm:flex-row sm:gap-4 md:justify-start">
+            <AuthOrChatLink className="rounded-full bg-emerald-600 px-6 py-3 text-white shadow-sm transition hover:bg-emerald-700">
+              Start chatting
+            </AuthOrChatLink>
+            <AuthOrChatLink className="rounded-full border border-zinc-300 bg-white px-6 py-3 transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800">
+              Sign in
+            </AuthOrChatLink>
+          </div>
+        </div>
+        <div className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="rounded-2xl bg-[#e5ddd5] p-4">
+            <div className="mb-3 flex justify-end">
+              <div className="max-w-[78%] rounded-lg rounded-br-none bg-[#d9fdd3] px-3 py-2 text-sm text-[#111b21]">
+                Hey! Group call at 7?
+              </div>
+            </div>
+            <div className="mb-3 flex justify-start">
+              <div className="max-w-[78%] rounded-lg rounded-bl-none bg-white px-3 py-2 text-sm text-[#111b21]">
+                Works for me. I will share agenda.
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <div className="max-w-[78%] rounded-lg rounded-br-none bg-[#d9fdd3] px-3 py-2 text-sm text-[#111b21]">
+                Perfect. See you in the group.
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
