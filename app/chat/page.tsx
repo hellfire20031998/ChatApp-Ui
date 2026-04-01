@@ -1,7 +1,7 @@
 "use client";
 
 import axios from "axios";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   MessageSquare,
@@ -13,6 +13,7 @@ import {
   Smile,
   Video,
 } from "@/lib/icons";
+import { ChatEmojiPicker } from "@/components/chat-emoji-picker";
 import { useAppTheme } from "@/components/app-theme-provider";
 import { LogoutButton } from "@/components/logout-button";
 import {
@@ -306,6 +307,7 @@ export default function ChatPage() {
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [themeBusy, setThemeBusy] = useState(false);
   const [preferenceInitialized, setPreferenceInitialized] = useState(false);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
 
   const activeChatIdRef = useRef<string | null>(null);
   const selfUserIdRef = useRef<string | null>(null);
@@ -314,6 +316,17 @@ export default function ChatPage() {
   const isPrependingRef = useRef(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingActiveRef = useRef(false);
+  const draftInputRef = useRef<HTMLInputElement | null>(null);
+  const emojiAnchorRef = useRef<HTMLDivElement | null>(null);
+
+  const emojiPickerTheme = useMemo((): "light" | "dark" => {
+    if (preference.themeMode === "DARK") return "dark";
+    if (preference.themeMode === "LIGHT") return "light";
+    if (typeof window === "undefined") return "light";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  }, [preference.themeMode]);
 
   const applyPreference = useCallback(
     async (next: UserPreference) => {
@@ -866,6 +879,7 @@ export default function ChatPage() {
     e.preventDefault();
     const text = draft.trim();
     if (!text || !selectedChat) return;
+    setEmojiPickerOpen(false);
     setError(null);
 
     const tempId = `pending-${Date.now()}`;
@@ -924,37 +938,85 @@ export default function ChatPage() {
     setSelectedChat(null);
   };
 
-  const handleDraftChange = (value: string) => {
-    setDraft(value);
-    if (!selectedChat?.chatId || socketStatus !== "connected") return;
-    const text = value.trim();
-    if (text.length > 0 && !typingActiveRef.current) {
-      sendTypingEvent({
-        chatId: selectedChat.chatId,
-        receiverId: selectedChat.userId || undefined,
-        typing: true,
+  const handleDraftChange = useCallback(
+    (value: string) => {
+      setDraft(value);
+      if (!selectedChat?.chatId || socketStatus !== "connected") return;
+      const text = value.trim();
+      if (text.length > 0 && !typingActiveRef.current) {
+        sendTypingEvent({
+          chatId: selectedChat.chatId,
+          receiverId: selectedChat.userId || undefined,
+          typing: true,
+        });
+        typingActiveRef.current = true;
+      }
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        if (!typingActiveRef.current) return;
+        sendTypingEvent({
+          chatId: selectedChat.chatId,
+          receiverId: selectedChat.userId || undefined,
+          typing: false,
+        });
+        typingActiveRef.current = false;
+      }, 1200);
+      if (text.length === 0 && typingActiveRef.current) {
+        sendTypingEvent({
+          chatId: selectedChat.chatId,
+          receiverId: selectedChat.userId || undefined,
+          typing: false,
+        });
+        typingActiveRef.current = false;
+      }
+    },
+    [selectedChat?.chatId, selectedChat?.userId, socketStatus],
+  );
+
+  const insertEmojiInDraft = useCallback(
+    (emoji: string) => {
+      const el = draftInputRef.current;
+      let start = draft.length;
+      let end = draft.length;
+      if (el && document.activeElement === el) {
+        start = el.selectionStart ?? draft.length;
+        end = el.selectionEnd ?? draft.length;
+      }
+      const next = draft.slice(0, start) + emoji + draft.slice(end);
+      handleDraftChange(next);
+      setEmojiPickerOpen(false);
+      const caret = start + emoji.length;
+      requestAnimationFrame(() => {
+        const input = draftInputRef.current;
+        if (!input) return;
+        input.focus();
+        input.setSelectionRange(caret, caret);
       });
-      typingActiveRef.current = true;
-    }
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      if (!typingActiveRef.current) return;
-      sendTypingEvent({
-        chatId: selectedChat.chatId,
-        receiverId: selectedChat.userId || undefined,
-        typing: false,
-      });
-      typingActiveRef.current = false;
-    }, 1200);
-    if (text.length === 0 && typingActiveRef.current) {
-      sendTypingEvent({
-        chatId: selectedChat.chatId,
-        receiverId: selectedChat.userId || undefined,
-        typing: false,
-      });
-      typingActiveRef.current = false;
-    }
-  };
+    },
+    [draft, handleDraftChange],
+  );
+
+  useEffect(() => {
+    if (!emojiPickerOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (!emojiAnchorRef.current?.contains(e.target as Node)) {
+        setEmojiPickerOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setEmojiPickerOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [emojiPickerOpen]);
+
+  useEffect(() => {
+    setEmojiPickerOpen(false);
+  }, [selectedChat?.chatId]);
 
   useEffect(() => {
     return () => {
@@ -1600,15 +1662,33 @@ export default function ChatPage() {
                 >
                   <Paperclip className="h-6 w-6" />
                 </button>
-                <button
-                  type="button"
-                  className="mb-1 shrink-0 rounded-full p-2 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                  aria-label="Emoji"
-                >
-                  <Smile className="h-6 w-6" />
-                </button>
+                <div ref={emojiAnchorRef} className="relative mb-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setEmojiPickerOpen((o) => !o)}
+                    className={`rounded-full p-2 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 ${emojiPickerOpen ? "bg-zinc-100 dark:bg-zinc-800" : ""}`}
+                    aria-label="Emoji"
+                    aria-expanded={emojiPickerOpen}
+                    aria-haspopup="dialog"
+                  >
+                    <Smile className="h-6 w-6" />
+                  </button>
+                  {emojiPickerOpen ? (
+                    <div
+                      className="absolute bottom-full left-0 z-50 mb-2 overflow-hidden rounded-xl border border-zinc-200 shadow-xl dark:border-zinc-700"
+                      role="dialog"
+                      aria-label="Emoji picker"
+                    >
+                      <ChatEmojiPicker
+                        theme={emojiPickerTheme}
+                        onSelect={insertEmojiInDraft}
+                      />
+                    </div>
+                  ) : null}
+                </div>
                 <div className="mb-1 flex min-h-[42px] min-w-0 flex-1 items-center rounded-lg bg-white px-3 py-1 shadow-sm">
                   <input
+                    ref={draftInputRef}
                     value={draft}
                     onChange={(e) => handleDraftChange(e.target.value)}
                     placeholder="Type a message"
