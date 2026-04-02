@@ -1237,17 +1237,17 @@ export default function ChatPage() {
       <aside
         className={`flex min-h-0 w-full min-w-0 flex-col border-zinc-200/80 bg-white/80 backdrop-blur md:w-[400px] md:max-w-[40vw] md:border-r dark:border-zinc-800 dark:bg-zinc-900/80 ${sidebarHiddenOnMobile ? "hidden md:flex" : "flex"}`}
       >
-        <header className="flex h-[60px] shrink-0 items-center justify-between gap-3 border-b border-zinc-200/80 bg-white/90 px-4 text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
+        <header className="flex h-[60px] shrink-0 items-center justify-between gap-2 border-b border-zinc-200/80 bg-white/90 px-3 text-zinc-900 sm:gap-3 sm:px-4 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
           <h1 className="text-xl font-medium tracking-tight">Chats</h1>
           <div className="relative flex items-center gap-2">
             <button
               type="button"
               onClick={() => setThemeMenuOpen((v) => !v)}
-              className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
+              className="shrink-0 rounded-md border border-zinc-200 px-2 py-2 text-xs font-medium text-zinc-700 transition hover:bg-zinc-100 sm:px-3 sm:py-1.5 sm:text-sm dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
             >
               Theme
             </button>
-            <LogoutButton className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800">
+            <LogoutButton className="shrink-0 rounded-md border border-zinc-200 px-2 py-2 text-xs font-medium text-zinc-700 transition hover:bg-zinc-100 sm:px-3 sm:py-1.5 sm:text-sm dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800">
               Log out
             </LogoutButton>
             {themeMenuOpen ? (
@@ -1303,7 +1303,7 @@ export default function ChatPage() {
         </header>
 
         <div className="shrink-0 bg-zinc-50/70 px-3 py-2 dark:bg-zinc-900/40">
-          <form onSubmit={handleSearch} className="flex gap-2">
+          <form onSubmit={handleSearch} className="flex flex-col gap-2 sm:flex-row">
             <div className="flex min-w-0 flex-1 items-center gap-3 rounded-lg border border-transparent bg-white px-3 py-1.5 shadow-sm dark:border-zinc-700 dark:bg-zinc-800">
               <Search className="h-[18px] w-[18px] shrink-0 text-zinc-500 dark:text-zinc-400" />
               <input
@@ -1313,20 +1313,22 @@ export default function ChatPage() {
                 className="min-w-0 flex-1 bg-transparent py-1.5 text-[15px] text-zinc-900 placeholder:text-zinc-500 outline-none dark:text-zinc-100 dark:placeholder:text-zinc-400"
               />
             </div>
-            <button
-              type="submit"
-              disabled={searchBusy}
-              className="shrink-0 rounded-lg bg-(--accent-500) px-4 py-2 text-sm font-medium text-white transition hover:bg-(--accent-600) disabled:opacity-50"
-            >
-              {searchBusy ? "…" : "Search"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setGroupModalOpen(true)}
-              className="shrink-0 rounded-lg border border-(--accent-500) bg-white px-3 py-2 text-sm font-medium text-(--accent-600) transition hover:bg-(--accent-100) dark:bg-zinc-900 dark:hover:bg-zinc-800"
-            >
-              New group
-            </button>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+              <button
+                type="submit"
+                disabled={searchBusy}
+                className="min-h-11 w-full rounded-lg bg-(--accent-500) px-4 py-2 text-sm font-medium text-white transition hover:bg-(--accent-600) disabled:opacity-50 sm:min-h-0 sm:w-auto"
+              >
+                {searchBusy ? "…" : "Search"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setGroupModalOpen(true)}
+                className="min-h-11 w-full rounded-lg border border-(--accent-500) bg-white px-3 py-2 text-sm font-medium text-(--accent-600) transition hover:bg-(--accent-100) dark:bg-zinc-900 dark:hover:bg-zinc-800 sm:min-h-0 sm:w-auto"
+              >
+                New group
+              </button>
+            </div>
           </form>
           <div className="mt-2 grid grid-cols-2 gap-2">
             <button
@@ -1582,7 +1584,7 @@ export default function ChatPage() {
                     disabled={
                       webrtc.callPhase !== "idle" || socketStatus !== "connected"
                     }
-                    className="rounded-full p-2 text-zinc-600 opacity-90 hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    className="rounded-full p-2.5 text-zinc-600 opacity-90 hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-800"
                     aria-label="Voice call"
                   >
                     <Phone className="h-[22px] w-[22px]" />
@@ -1593,7 +1595,7 @@ export default function ChatPage() {
                     disabled={
                       webrtc.callPhase !== "idle" || socketStatus !== "connected"
                     }
-                    className="rounded-full p-2 text-zinc-600 opacity-90 hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    className="rounded-full p-2.5 text-zinc-600 opacity-90 hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-800"
                     aria-label="Video call"
                   >
                     <Video className="h-[22px] w-[22px]" />
@@ -1729,7 +1731,7 @@ export default function ChatPage() {
               >
                 <button
                   type="button"
-                  className="mb-1 shrink-0 rounded-full p-2 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                  className="mb-1 min-h-11 min-w-11 shrink-0 rounded-full p-2 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 sm:min-h-0 sm:min-w-0"
                   aria-label="Attach"
                 >
                   <Paperclip className="h-6 w-6" />
@@ -1738,7 +1740,7 @@ export default function ChatPage() {
                   <button
                     type="button"
                     onClick={() => setEmojiPickerOpen((o) => !o)}
-                    className={`rounded-full p-2 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 ${emojiPickerOpen ? "bg-zinc-100 dark:bg-zinc-800" : ""}`}
+                    className={`min-h-11 min-w-11 rounded-full p-2 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 sm:min-h-0 sm:min-w-0 ${emojiPickerOpen ? "bg-zinc-100 dark:bg-zinc-800" : ""}`}
                     aria-label="Emoji"
                     aria-expanded={emojiPickerOpen}
                     aria-haspopup="dialog"
@@ -1769,7 +1771,7 @@ export default function ChatPage() {
                 </div>
                 <button
                   type="submit"
-                  className="mb-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-(--accent-500) text-white shadow-md transition hover:bg-(--accent-600) disabled:opacity-40"
+                  className="mb-1 flex min-h-12 min-w-12 shrink-0 items-center justify-center rounded-full bg-(--accent-500) text-white shadow-md transition hover:bg-(--accent-600) disabled:opacity-40"
                   disabled={
                     !draft.trim() ||
                     socketStatus !== "connected"
@@ -1798,7 +1800,7 @@ export default function ChatPage() {
       </section>
     </div>
     {webrtc.callPhase !== "idle" ? (
-      <div className="fixed inset-0 z-[60] flex flex-col bg-zinc-950/95 text-white">
+      <div className="fixed inset-0 z-60 flex flex-col bg-zinc-950/95 text-white">
         <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
         {webrtc.callError ? (
           <p className="bg-red-600/90 px-4 py-2 text-center text-sm">{webrtc.callError}</p>
@@ -1916,8 +1918,8 @@ export default function ChatPage() {
       </div>
     ) : null}
     {groupModalOpen ? (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-        <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center">
+        <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Create group</h2>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
             Search users, select members, and create a group chat.
@@ -1951,7 +1953,7 @@ export default function ChatPage() {
               </ul>
             )}
           </div>
-          <div className="mt-4 flex justify-end gap-2">
+          <div className="sticky bottom-0 mt-4 flex justify-end gap-2 bg-white pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] dark:bg-zinc-900">
             <button
               type="button"
               onClick={() => {
@@ -1960,7 +1962,7 @@ export default function ChatPage() {
                 setGroupNameDraft("");
                 setGroupMemberIds([]);
               }}
-              className="rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:text-zinc-100"
+              className="min-h-11 rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:text-zinc-100"
             >
               Cancel
             </button>
@@ -1968,7 +1970,7 @@ export default function ChatPage() {
               type="button"
               onClick={() => void handleCreateGroup()}
               disabled={groupBusy}
-              className="rounded-md bg-(--accent-500) px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+              className="min-h-11 rounded-md bg-(--accent-500) px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
               {groupBusy ? "Creating..." : "Create"}
             </button>
