@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { persistAuthSession } from "@/lib/auth-storage";
-import { login, register } from "@/service/api";
+import { login, register, resendVerificationEmail } from "@/service/api";
 
 const inputClass =
   "mt-2 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none ring-(--accent-500) placeholder:text-zinc-400 focus:border-(--accent-500) focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-(--accent-500)";
@@ -15,6 +15,8 @@ export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [showResend, setShowResend] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -31,6 +33,8 @@ export default function AuthPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setInfo(null);
+    setShowResend(false);
     setPending(true);
 
     try {
@@ -50,22 +54,47 @@ export default function AuthPage() {
         password: form.password,
         username: form.username,
       });
-      persistAuthSession(reg.data.token, reg.data.user);
-      router.replace("/chat");
+      setInfo(reg.data || "Account created. Please verify your email.");
+      setIsLogin(true);
+      setForm((prev) => ({ ...prev, password: "" }));
       return;
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
-        const msg = err.response?.data;
+        const body = err.response?.data as
+          | { message?: string; errorCode?: string }
+          | undefined;
         setError(
-          typeof msg === "object" &&
-            msg !== null &&
-            "message" in msg &&
-            typeof (msg as { message: unknown }).message === "string"
-            ? (msg as { message: string }).message
+          body && typeof body.message === "string"
+            ? body.message
             : err.message || "Something went wrong",
         );
+        setShowResend(body?.errorCode === "EMAIL_NOT_VERIFIED");
       } else {
         setError("Something went wrong");
+      }
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setError(null);
+    setInfo(null);
+    setPending(true);
+    try {
+      const res = await resendVerificationEmail(form.email);
+      setInfo(res.data || "Verification email sent.");
+      setShowResend(false);
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        const body = err.response?.data as { message?: string } | undefined;
+        setError(
+          body?.message && typeof body.message === "string"
+            ? body.message
+            : err.message || "Failed to resend verification email",
+        );
+      } else {
+        setError("Failed to resend verification email");
       }
     } finally {
       setPending(false);
@@ -113,6 +142,24 @@ export default function AuthPage() {
           >
             {error}
           </p>
+        ) : null}
+        {info ? (
+          <p
+            className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+            role="status"
+          >
+            {info}
+          </p>
+        ) : null}
+        {showResend ? (
+          <button
+            type="button"
+            onClick={handleResendVerification}
+            disabled={pending}
+            className="mt-3 w-full rounded-xl border border-zinc-300 bg-white py-2.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+          >
+            {pending ? "Please wait…" : "Resend verification email"}
+          </button>
         ) : null}
 
         <form className="mt-6" onSubmit={handleSubmit}>
@@ -192,6 +239,8 @@ export default function AuthPage() {
             onClick={() => {
               setIsLogin(!isLogin);
               setError(null);
+              setInfo(null);
+              setShowResend(false);
             }}
           >
             {isLogin ? "Sign up" : "Sign in"}

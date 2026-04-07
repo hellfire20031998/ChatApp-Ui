@@ -78,10 +78,29 @@ export const login = async (
 
 export const register = async (
   payload: RegisterRequest,
-): Promise<ApiResponse<AuthSessionPayload>> => {
-  const res = await axiosInstance.post<ApiResponse<AuthSessionPayload>>(
+): Promise<ApiResponse<string>> => {
+  const res = await axiosInstance.post<ApiResponse<string>>(
     `/auth/register`,
     payload,
+  );
+  return res.data;
+};
+
+export const verifyEmail = async (
+  token: string,
+): Promise<ApiResponse<string>> => {
+  const res = await axiosInstance.post<ApiResponse<string>>(`/auth/verify-email`, {
+    token,
+  });
+  return res.data;
+};
+
+export const resendVerificationEmail = async (
+  email: string,
+): Promise<ApiResponse<string>> => {
+  const res = await axiosInstance.post<ApiResponse<string>>(
+    `/auth/resend-verification`,
+    { email },
   );
   return res.data;
 };
