@@ -7,6 +7,7 @@ import type {
   LoginRequest,
   MyChatsPayload,
   RegisterRequest,
+  RegisterResponsePayload,
   UserPreference,
 } from "./type";
 
@@ -78,8 +79,8 @@ export const login = async (
 
 export const register = async (
   payload: RegisterRequest,
-): Promise<ApiResponse<string>> => {
-  const res = await axiosInstance.post<ApiResponse<string>>(
+): Promise<ApiResponse<RegisterResponsePayload>> => {
+  const res = await axiosInstance.post<ApiResponse<RegisterResponsePayload>>(
     `/auth/register`,
     payload,
   );

@@ -54,7 +54,12 @@ export default function AuthPage() {
         password: form.password,
         username: form.username,
       });
-      setInfo(reg.data || "Account created. Please verify your email.");
+      if (reg.data.token && reg.data.user) {
+        persistAuthSession(reg.data.token, reg.data.user);
+        router.replace("/chat");
+        return;
+      }
+      setInfo(reg.message || "Account created. Please verify your email.");
       setIsLogin(true);
       setForm((prev) => ({ ...prev, password: "" }));
       return;

@@ -46,6 +46,12 @@ export type AuthSessionPayload = {
   user: AuthUser;
 };
 
+/** `/auth/register` — `token` is null when email verification is required before login. */
+export type RegisterResponsePayload = {
+  token: string | null;
+  user: AuthUser;
+};
+
 /** Nested user on a chat row from `GET /chats/my-chats`. */
 export type ChatOtherUser = {
   id: string;
