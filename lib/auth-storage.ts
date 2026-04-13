@@ -1,3 +1,7 @@
+import {
+  clearAuthSessionCookie,
+  setAuthSessionCookie,
+} from "@/lib/auth-session-cookie";
 import type { AuthUser, UserPreference } from "@/service/type";
 
 const USER_JSON_KEY = "user";
@@ -13,11 +17,19 @@ export function persistAuthSession(token: string, user: AuthUser): void {
   };
   localStorage.setItem("token", token);
   localStorage.setItem(USER_JSON_KEY, JSON.stringify(normalizedUser));
+  setAuthSessionCookie();
 }
 
 export function clearAuthSession(): void {
   localStorage.removeItem("token");
   localStorage.removeItem(USER_JSON_KEY);
+  clearAuthSessionCookie();
+}
+
+export function readStoredToken(): string | null {
+  if (typeof window === "undefined") return null;
+  const token = localStorage.getItem("token");
+  return typeof token === "string" && token.length > 0 ? token : null;
 }
 
 export function readStoredUser(): AuthUser | null {
@@ -54,4 +66,8 @@ export function updateStoredUserPreference(preference: UserPreference): void {
 export function readAuthenticatedUserId(): string | null {
   const user = readStoredUser();
   return typeof user?.id === "string" ? user.id : null;
+}
+
+export function isAuthenticated(): boolean {
+  return readStoredToken() !== null && readStoredUser() !== null;
 }

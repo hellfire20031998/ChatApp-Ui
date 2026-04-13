@@ -3,8 +3,9 @@
 import axios from "axios";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { persistAuthSession } from "@/lib/auth-storage";
+import { useEffect, useState } from "react";
+import { setAuthSessionCookie } from "@/lib/auth-session-cookie";
+import { isAuthenticated, persistAuthSession } from "@/lib/auth-storage";
 import { login, register, resendVerificationEmail } from "@/service/api";
 
 const inputClass =
@@ -12,6 +13,13 @@ const inputClass =
 
 export default function AuthPage() {
   const router = useRouter();
+
+  useEffect(() => {
+    if (!isAuthenticated()) return;
+    setAuthSessionCookie();
+    router.replace("/chat");
+  }, [router]);
+
   const [isLogin, setIsLogin] = useState(true);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
