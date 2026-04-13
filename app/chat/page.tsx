@@ -18,8 +18,9 @@ import {
   VideoOff,
 } from "@/lib/icons";
 import { ChatEmojiPicker } from "@/components/chat-emoji-picker";
+import { ChatUserMenu } from "@/components/chat-user-menu";
 import { useAppTheme } from "@/components/app-theme-provider";
-import { LogoutButton } from "@/components/logout-button";
+import { readStoredUser } from "@/lib/auth-storage";
 import { useWebRtcCall } from "@/hooks/use-webrtc-call";
 import {
   connectSocket,
@@ -48,6 +49,7 @@ import {
   updateUserPreferences,
 } from "@/service/api";
 import type {
+  AuthUser,
   ChatMessageDto,
   MyChatSummary,
   ThemeMode,
@@ -309,8 +311,8 @@ export default function ChatPage() {
   const [groupSettingsBusy, setGroupSettingsBusy] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<"chats" | "users">("chats");
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
-  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [themeBusy, setThemeBusy] = useState(false);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [preferenceInitialized, setPreferenceInitialized] = useState(false);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
 
@@ -424,6 +426,10 @@ export default function ChatPage() {
     },
     [applyPreference, preference, themeBusy],
   );
+
+  useEffect(() => {
+    setCurrentUser(readStoredUser());
+  }, []);
 
   useEffect(() => {
     activeChatIdRef.current = selectedChat?.chatId ?? null;
@@ -1238,68 +1244,14 @@ export default function ChatPage() {
         className={`flex min-h-0 w-full min-w-0 flex-col border-zinc-200/80 bg-white/80 backdrop-blur md:w-[400px] md:max-w-[40vw] md:border-r dark:border-zinc-800 dark:bg-zinc-900/80 ${sidebarHiddenOnMobile ? "hidden md:flex" : "flex"}`}
       >
         <header className="flex h-[60px] shrink-0 items-center justify-between gap-2 border-b border-zinc-200/80 bg-white/90 px-3 text-zinc-900 sm:gap-3 sm:px-4 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
-          <h1 className="text-xl font-medium tracking-tight">Chats</h1>
-          <div className="relative flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setThemeMenuOpen((v) => !v)}
-              className="shrink-0 rounded-md border border-zinc-200 px-2 py-2 text-xs font-medium text-zinc-700 transition hover:bg-zinc-100 sm:px-3 sm:py-1.5 sm:text-sm dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
-            >
-              Theme
-            </button>
-            <LogoutButton className="shrink-0 rounded-md border border-zinc-200 px-2 py-2 text-xs font-medium text-zinc-700 transition hover:bg-zinc-100 sm:px-3 sm:py-1.5 sm:text-sm dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800">
-              Log out
-            </LogoutButton>
-            {themeMenuOpen ? (
-              <div className="absolute right-0 top-11 z-30 w-64 rounded-xl border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                  Theme mode
-                </p>
-                <div className="mt-2 grid grid-cols-3 gap-2">
-                  {(["LIGHT", "DARK", "SYSTEM"] as ThemeMode[]).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => onThemeModeChange(mode)}
-                      disabled={themeBusy}
-                      className={`rounded-md border px-2 py-1.5 text-xs font-medium transition ${
-                        preference.themeMode === mode
-                          ? "border-(--accent-500) bg-(--accent-100) text-(--accent-600)"
-                          : "border-zinc-200 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                      }`}
-                    >
-                      {mode.toLowerCase()}
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                  Theme accent
-                </p>
-                <div className="mt-2 grid grid-cols-3 gap-2">
-                  {(["EMERALD", "OCEAN", "SUNSET"] as ThemePreset[]).map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => onThemePresetChange(preset)}
-                      disabled={themeBusy}
-                      className={`rounded-md border px-2 py-1.5 text-xs font-medium transition ${
-                        preference.themePreset === preset
-                          ? "border-(--accent-500) bg-(--accent-100) text-(--accent-600)"
-                          : "border-zinc-200 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                      }`}
-                    >
-                      {preset.toLowerCase()}
-                    </button>
-                  ))}
-                </div>
-                {themeBusy ? (
-                  <p className="mt-3 text-[11px] text-zinc-500 dark:text-zinc-400">
-                    Saving theme...
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
+          <h1 className="min-w-0 shrink text-xl font-medium tracking-tight">Chats</h1>
+          <ChatUserMenu
+            user={currentUser}
+            preference={preference}
+            themeBusy={themeBusy}
+            onThemeModeChange={onThemeModeChange}
+            onThemePresetChange={onThemePresetChange}
+          />
         </header>
 
         <div className="shrink-0 bg-zinc-50/70 px-3 py-2 dark:bg-zinc-900/40">

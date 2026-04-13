@@ -1,6 +1,8 @@
 /** App-wide Lucide re-exports — add icons here, import from `@/lib/icons` elsewhere. */
 export {
   ArrowLeft,
+  ChevronRight,
+  LogOut,
   MessageSquare,
   Mic,
   MicOff,
@@ -13,6 +15,7 @@ export {
   SendHorizontal,
   Shield,
   Smile,
+  User,
   Users,
   Video,
   VideoOff,
